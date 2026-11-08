@@ -1,14 +1,10 @@
 # CarveSpace 1.0.0
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/live-demo.gif" alt="CarveSpace processing live audio" width="650">
-</p>
-
-<p align="center">
   <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/skins.gif" alt="CarveSpace skins" width="650">
 </p>
 
-First public release of **CarveSpace**, the 32-band spectral sidechain carver by **Abynth Audio**.
+First public release of **CarveSpace**, the 32-band spectral sidechain carver I wrote for **Abynth Audio**.
 
 ## Downloads
 
@@ -18,18 +14,18 @@ First public release of **CarveSpace**, the 32-band spectral sidechain carver by
 | Windows x64 | `CarveSpace-windows-x64.vst3` (direct VST3 file) — **untested** (cross-built on Linux) |
 | macOS Apple Silicon | `CarveSpace-macos-arm64.vst3.tar.gz` (VST3 only, unsigned) — **untested** (CI-built, not run on macOS hardware) |
 
-## Highlights
+## What's inside
 
 - Zero-latency 32-band dynamic EQ driven by a stereo external sidechain.
 - Amount, Low-cut, High-cut, Attack, Release, Pan, L/R–M/S, Freeze and Sidechain Audition.
-- Spectrum display with sidechain spectrum and applied reduction curve.
-- Three skins (Dark / Light / pastel Pink), persisted per project, plus persisted editor size.
-- Animated Abynth Audio swirl; click it to pause/resume.
+- Spectrum display with the sidechain spectrum and the applied reduction curve.
+- Three skins (Dark / Light / pastel Pink), remembered per project, plus a remembered editor size.
+- Animated Abynth Audio swirl: it rotates slowly and you can click it to pause or resume.
 - Resizable 650×650 editor, no authorization, no telemetry, GPLv3.
 
 ## Notes
 
-- Windows and macOS builds are provided **untested**: development and testing happen on Linux; the Windows DLL is cross-compiled with LLVM-MinGW and the macOS bundle is built by GitHub Actions but has not been run on Windows/macOS hardware. Please report issues.
-- macOS build is unsigned/not notarised: right-click → Open on first launch if Gatekeeper complains.
-- The plug-in is an independent reimplementation inspired by the Trackspacer workflow; it contains no Wavesfactory code, binaries, artwork or fonts and is not affiliated with Wavesfactory.
+- I develop and test on Linux. The Windows and macOS builds are provided **untested**: the Windows DLL is cross-compiled with LLVM-MinGW and the macOS bundle is built by GitHub Actions, but I have not run them on Windows or macOS hardware. Please open an issue if something fails there.
+- The macOS build is unsigned/not notarised: right-click → Open on the first launch if Gatekeeper complains.
+- CarveSpace is my own independent implementation, inspired by the Trackspacer workflow. It contains no Wavesfactory code, binaries, artwork or fonts and is not affiliated with Wavesfactory.
 - Built with JUCE 7.0.5. Comfortaa font under the SIL Open Font License.
