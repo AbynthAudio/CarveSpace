@@ -12,7 +12,7 @@ BackgroundComponent::BackgroundComponent()
     setOpaque (false);
 
     // Low-cost swirl rotation: only the small badge area is repainted.
-    startTimerHz (30);
+    startTimerHz (60);
 
     // Very fine grain for the brushed-metal plate.
     constexpr int size = 512;
@@ -219,7 +219,7 @@ void BackgroundComponent::timerCallback()
     if (logoPaused || ! isShowing())
         return;
 
-    logoAngle += 0.022f; // clockwise, ~9.5 s per revolution at 30 Hz
+    logoAngle += 0.011f; // clockwise, ~9.5 s per revolution at 60 Hz
 
     if (logoAngle >= juce::MathConstants<float>::twoPi)
         logoAngle -= juce::MathConstants<float>::twoPi;
