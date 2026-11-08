@@ -55,10 +55,10 @@ jobs:
             os: windows-latest
             artifact_name: CarveSpace-windows-x64
             zip_name: CarveSpace-windows-x64.zip
-          # macos-14 and macos-latest are both Apple Silicon (arm64).
-          # If GitHub retires macos-14, change os to macos-latest.
+          # macOS 15 hosted runners are Apple Silicon (arm64).
+          # If GitHub retires macos-15, switch to macos-latest.
           - name: macOS arm64 (Apple Silicon)
-            os: macos-14
+            os: macos-15
             artifact_name: CarveSpace-macos-arm64
             zip_name: CarveSpace-macos-arm64.zip
 
