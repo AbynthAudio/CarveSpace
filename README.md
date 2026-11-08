@@ -128,12 +128,6 @@ Output: `build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3`.
 
 Cross-compiling Windows with LLVM-MinGW and macOS CI notes are in [docs/BUILD.md](docs/BUILD.md) and [docs/BUILD-CROSS.md](docs/BUILD-CROSS.md). The GitHub Actions matrix builds Linux, Windows and macOS arm64 automatically (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
-## Validation
-
-`tests/validate.sh` is a self-contained offline harness: parameters, buses, latency, unity path, effect depth, filters, freeze, pan, M/S, sidechain audition, state save/restore, robustness at 1–4096 block sizes and 44.1/48/96 kHz, CPU, and screenshots.
-
-Last run: **83 passed, 0 failed** (pluginval strictness 5 also passes). See [tests/REPORT.md](tests/REPORT.md).
-
 ## Project layout
 
 ```
