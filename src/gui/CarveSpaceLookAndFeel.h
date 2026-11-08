@@ -171,8 +171,8 @@ namespace layout
     inline const juce::Rectangle<float> bracketRight { 508.0f, 431.0f, 40.0f, 15.0f };
 
     // Brand badge and maker wordmark.
-    inline const juce::Rectangle<float> logo      { 290.0f, 535.0f, 70.0f, 70.0f };  // swirl badge, centred on x=325
-    inline const juce::Rectangle<float> wordmark  { 245.0f, 615.0f, 160.0f, 12.0f }; // small uppercase maker text
+    inline const juce::Rectangle<float> logo      { 290.0f, 547.0f, 70.0f, 70.0f };  // swirl badge, centred on x=325
+    inline const juce::Rectangle<float> wordmark  { 245.0f, 626.0f, 160.0f, 12.0f }; // small uppercase maker text
 
     // Always-visible theme / skin switcher (top-right of the plate).
     inline const juce::Rectangle<float> skinButton { 578.0f, 12.0f, 56.0f, 32.0f };
