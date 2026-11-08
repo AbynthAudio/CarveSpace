@@ -38,16 +38,30 @@ Insert it on a bass, a pad, a vocal or a whole bus, feed it a sidechain, and tur
 - **Animated Abynth Audio swirl** (clockwise black-hole rotation, ~9.5 s/rev); click it to pause/resume.
 - **No licensing, serial, iLok or authorization** — GPLv3 open source.
 
-## Screenshots
+## Screenshots & animations
+
+**The three skins.** The faceplate, spectrum display and knobs are redrawn for each skin; the Abynth Audio swirl keeps its original colours.
 
 <p align="center">
-  <img src="docs/media/themes.gif" alt="CarveSpace themes: Dark, Advanced Panel, Light, Pink" width="650"><br>
-  <sub>Dark → Advanced Panel → Light → Pink</sub>
+  <img src="docs/media/skins.gif" alt="CarveSpace skins: Dark, Light and Pink" width="650">
 </p>
 
 <p align="center">
-  <img src="docs/media/swirl-rotation.gif" alt="Animated Abynth Audio swirl" width="180"><br>
-  <sub>The animated black-hole swirl (60 Hz, click to pause).</sub>
+  <img src="docs/screenshots/dark-650.png" width="31%" alt="Dark skin">
+  <img src="docs/screenshots/light-650.png" width="31%" alt="Light skin">
+  <img src="docs/screenshots/pink-650.png" width="31%" alt="Pink skin">
+</p>
+
+**Advanced panel in use.** Pan, L/R–M/S, Attack, Release and Sidechain audition, while the swirl keeps rotating.
+
+<p align="center">
+  <img src="docs/media/advanced-panel.gif" alt="CarveSpace advanced panel with animated swirl" width="650">
+</p>
+
+**The animated black-hole swirl.** Clockwise, ~9.5 s per revolution, the hole stays perfectly centred; click it to pause/resume.
+
+<p align="center">
+  <img src="docs/media/swirl-rotation.gif" alt="Animated Abynth Audio black-hole swirl" width="180">
 </p>
 
 More stills in [`docs/screenshots/`](docs/screenshots).
