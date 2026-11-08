@@ -1,0 +1,7 @@
+JUCE/
+build*/
+dist/
+*.wav
+*.png
+!docs/*.png
+reference/audio/
