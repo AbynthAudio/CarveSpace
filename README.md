@@ -74,7 +74,6 @@ Grab the latest release:
 | **Windows x64** | `CarveSpace-windows-x64.vst3.tar.gz` | VST3 only — **untested** (cross-built on Linux) |
 | **macOS Apple Silicon** | `CarveSpace-macos-arm64.vst3.tar.gz` | VST3 only, unsigned — **untested** (built by CI, not run on macOS hardware) |
 
-Every archive contains only the `CarveSpace.vst3` plug-in bundle (no Standalone).
 
 ### Install
 
