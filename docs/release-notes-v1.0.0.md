@@ -4,8 +4,6 @@
   <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/skins.gif" alt="CarveSpace skins" width="650">
 </p>
 
-
-
 First public release of **CarveSpace**, the 32-band spectral sidechain carver by **Abynth Audio**.
 
 ## Downloads

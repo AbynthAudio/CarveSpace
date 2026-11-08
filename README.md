@@ -122,10 +122,10 @@ git clone https://github.com/AbynthAudio/CarveSpace.git
 cd CarveSpace
 git clone --depth 1 --branch 7.0.5 https://github.com/juce-framework/JUCE.git JUCE
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-ninja -C build CarveSpace_VST3 CarveSpace_Standalone
+ninja -C build CarveSpace_VST3
 ```
 
-Outputs: `build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3` and the Standalone app.
+Output: `build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3`.
 Cross-compiling Windows with LLVM-MinGW and packaging notes are in [docs/BUILD.md](docs/BUILD.md) and [docs/BUILD-CROSS.md](docs/BUILD-CROSS.md). The GitHub Actions matrix builds Linux, Windows and macOS arm64 automatically. The Windows and macOS binaries are provided as-is and are **untested on Windows/macOS hardware** (development and testing happen on Linux); please report any issue. (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
 ## Validation
