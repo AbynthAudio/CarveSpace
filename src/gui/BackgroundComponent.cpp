@@ -219,7 +219,7 @@ void BackgroundComponent::timerCallback()
     if (logoPaused || ! isShowing())
         return;
 
-    logoAngle += 0.018f; // clockwise, ~11.6 s per revolution at 30 Hz
+    logoAngle += 0.026f; // clockwise, ~8.1 s per revolution at 30 Hz
 
     if (logoAngle >= juce::MathConstants<float>::twoPi)
         logoAngle -= juce::MathConstants<float>::twoPi;
