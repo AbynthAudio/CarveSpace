@@ -17,50 +17,48 @@
 
 ---
 
-## What is CarveSpace?
+## Why I built this
 
-CarveSpace is a **native, from-scratch VST3 implementation of the spectral-sidechain-carving workflow**: it analyses the spectrum of a trigger signal (the *sidechain*) and automatically applies the inverse EQ curve to the track it is inserted on, so two elements can occupy the same frequency range without fighting.
+I wanted a native VST3 that does the spectral-sidechain-carving trick on Linux, without Wine and without a dongle. So I wrote one.
 
-Insert it on a bass, a pad, a vocal or a whole bus, feed it a sidechain, and turn up **Amount**. CarveSpace does the dynamic, 32-band EQ work in real time — no manual notch-fishing, no compressor pumping.
+CarveSpace analyses the spectrum of a trigger signal (the *sidechain*) and applies the inverse EQ curve to the track it is inserted on, so two elements can share the same frequency range without fighting. Put it on a bass, a pad, a vocal or a full bus, feed it a sidechain, and turn up **Amount** — the 32-band dynamic EQ does the work in real time.
 
-> **Inspiration, not a copy.** CarveSpace is an independent reimplementation inspired by the workflow of Wavesfactory **Trackspacer 2.5**. All source code, UI drawing, assets and DSP in this repository were written from scratch for this project. This project is **not affiliated with, endorsed by, sponsored by or connected to Wavesfactory**, and contains **no Wavesfactory code, binaries, images or fonts**. *Trackspacer* is a trademark of its respective owner. The original parameter ranges and measured behaviour were studied only to provide compatible controls and interoperability.
+> **This is my own independent work.** I wrote all the code, the DSP and the UI drawing from scratch. CarveSpace is inspired by the workflow of Wavesfactory **Trackspacer 2.5**, but it is **not affiliated with, endorsed by or connected to Wavesfactory**, and it contains no Wavesfactory code, binaries, images or fonts. *Trackspacer* is a trademark of its respective owner. I studied the original's behaviour only to keep the controls familiar and interoperable.
 
-## Highlights
+## Features
 
 - **32-band dynamic EQ** driven by an external stereo sidechain.
-- **Zero added latency** — measured sample-exact against the reference workflow.
+- **Zero added latency** — measured sample-exact.
 - **Amount** (depth), **Low-cut / High-cut** filters, **Attack / Release** ballistics.
 - **L/R and M/S** processing with a continuous **Pan** of the effect.
 - **Freeze** (hold the current reduction curve) and **Sidechain Audition**.
-- **Spectrum display**: sidechain spectrum and applied reduction curve, with hover read-out.
-- **Resizable** 650×650 editor, persisted size and theme.
-- **Three skins**: Dark, Light and pastel **Pink** — persisted per project and in the user config.
-- **Animated Abynth Audio swirl** (clockwise black-hole rotation, ~9.5 s/rev); click it to pause/resume.
+- **Spectrum display** with the sidechain spectrum and the applied reduction curve, plus a hover read-out.
+- **Resizable** 650×650 editor; size and skin are remembered per project.
+- **Three skins**: Dark, Light and pastel **Pink**.
+- **Animated Abynth Audio swirl**: it rotates slowly; click it to pause or resume.
 - **No licensing, serial, iLok or authorization** — GPLv3 open source.
 
-## Screenshots & animations
+## Screenshots
 
-**Real-time processing.** A loop is playing through CarveSpace: the sidechain spectrum (blue) and the applied reduction curve (white) react live in the display. No standalone window chrome, just the plug-in editor.
-
-<p align="center">
-  <img src="docs/media/live-demo.gif" alt="CarveSpace processing live audio" width="650">
-</p>
-
-**The three skins.** Dark, Light and pastel Pink, with the same live audio running.
+**The three skins.**
 
 <p align="center">
   <img src="docs/media/skins.gif" alt="CarveSpace skins: Dark, Light and Pink" width="650">
 </p>
 
-**Advanced panel in use.** Pan, L/R–M/S, Attack, Release and Sidechain audition.
-
 <p align="center">
-  <img src="docs/media/advanced-panel.gif" alt="CarveSpace advanced panel" width="650">
+  <img src="docs/screenshots/dark-650.png" width="31%" alt="Dark skin">
+  <img src="docs/screenshots/light-650.png" width="31%" alt="Light skin">
+  <img src="docs/screenshots/pink-650.png" width="31%" alt="Pink skin">
 </p>
 
-The Abynth Audio swirl rotates slowly in the background; **click it to pause or resume** the animation.
+**The advanced panel** (Pan, L/R–M/S, Attack, Release, Sidechain audition):
 
-More stills in [`docs/screenshots/`](docs/screenshots).
+<p align="center">
+  <img src="docs/screenshots/advanced-650.png" alt="CarveSpace advanced panel" width="650">
+</p>
+
+The Abynth Audio swirl rotates in the background; **click it to pause or resume** the animation.
 
 ## Download
 
@@ -74,7 +72,6 @@ Grab the latest release:
 | **Windows x64** | `CarveSpace-windows-x64.vst3` | Direct VST3 file — **untested** (cross-built on Linux) |
 | **macOS Apple Silicon** | `CarveSpace-macos-arm64.vst3.tar.gz` | VST3 only, unsigned — **untested** (built by CI, not run on macOS hardware) |
 
-
 ### Install
 
 **Linux**
@@ -86,7 +83,10 @@ cp -r CarveSpace.vst3 ~/.vst3/
 ```
 
 **Windows** — copy `CarveSpace-windows-x64.vst3` directly to `C:\Program Files\Common Files\VST3\`.
+
 **macOS** — extract the `.tar.gz` and copy `CarveSpace.vst3` to `~/Library/Audio/Plug-Ins/VST3/` (or `/Library/Audio/Plug-Ins/VST3/`); if Gatekeeper complains, right-click → Open.
+
+I develop and test on Linux, so the Windows and macOS builds are provided as-is and have not been tested on those systems. If something does not work there, please open an issue.
 
 ## Quick start
 
@@ -125,20 +125,21 @@ ninja -C build CarveSpace_VST3
 ```
 
 Output: `build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3`.
-Cross-compiling Windows with LLVM-MinGW and packaging notes are in [docs/BUILD.md](docs/BUILD.md) and [docs/BUILD-CROSS.md](docs/BUILD-CROSS.md). The GitHub Actions matrix builds Linux, Windows and macOS arm64 automatically. The Windows and macOS binaries are provided as-is and are **untested on Windows/macOS hardware** (development and testing happen on Linux); please report any issue. (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
+
+Cross-compiling Windows with LLVM-MinGW and macOS CI notes are in [docs/BUILD.md](docs/BUILD.md) and [docs/BUILD-CROSS.md](docs/BUILD-CROSS.md). The GitHub Actions matrix builds Linux, Windows and macOS arm64 automatically (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
 ## Validation
 
-`tests/validate.sh` is a self-contained offline harness (parameters, buses, latency, unity path, effect depth, filters, freeze, pan, M/S, SC audition, state, robustness at 1–4096 block sizes and 44.1/48/96 kHz, CPU, screenshots). It is calibrated against measurements of the reference workflow and is run in CI-like fashion from a fresh build.
+`tests/validate.sh` is a self-contained offline harness: parameters, buses, latency, unity path, effect depth, filters, freeze, pan, M/S, sidechain audition, state save/restore, robustness at 1–4096 block sizes and 44.1/48/96 kHz, CPU, and screenshots.
 
 Last run: **83 passed, 0 failed** (pluginval strictness 5 also passes). See [tests/REPORT.md](tests/REPORT.md).
 
 ## Project layout
 
 ```
-src/            plugin processor, zero-latency 32-band DSP, editor and GUI
+src/            plug-in processor, zero-latency 32-band DSP, editor and GUI
 assets/         Abynth Audio logo/icon/wordmark + Comfortaa font
-docs/           build docs, spec, screenshots and animated GIFs
+docs/           build docs, spec, screenshots and the skins animation
 tests/          offline validation harness and report
 tools/host/     offline VST3 host (dump/render/screenshot tooling)
 .github/        CI matrix for Linux, Windows and macOS arm64
@@ -146,6 +147,6 @@ tools/host/     offline VST3 host (dump/render/screenshot tooling)
 
 ## License
 
-**GNU GPLv3** — see [LICENSE](LICENSE). Built with [JUCE 7.0.5](https://juce.com) (GPL-compatible). Comfortaa font is licensed under the SIL Open Font License.
+**GNU GPLv3** — see [LICENSE](LICENSE). Built with [JUCE 7.0.5](https://juce.com) (GPL-compatible). Comfortaa is licensed under the SIL Open Font License.
 
-<p align="center"><b>Made with care by Abynth Audio.</b></p>
+<p align="center"><b>Made by Abynth Audio.</b></p>
