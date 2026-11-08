@@ -133,6 +133,26 @@ jobs:
       # ----------------------------------------------------------------------
       # Configure + build
       # ----------------------------------------------------------------------
+      # JUCE 7.0.5 uses CGWindowListCreateImage, which the macOS 15 SDK marks as
+      # unavailable. The function is only used for native-window screenshots and
+      # is not needed by the plug-in, so stub it out for the CI mac build.
+      - name: Patch JUCE for the macOS 15 SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('JUCE/modules/juce_gui_basics/native/juce_mac_Windowing.mm')
+          s = p.read_text()
+          marker = 'static Image createNSWindowSnapshot (NSWindow* nsWindow)'
+          end = '\nImage createSnapshotOfNativeWindow'
+          start = s.index(marker)
+          stop = s.index(end, start)
+          s = s[:start] + 'static Image createNSWindowSnapshot (NSWindow*)\n{\n    return {};\n}\n' + s[stop:]
+          p.write_text(s)
+          print('patched JUCE mac window snapshot for macOS 15 SDK')
+          PY
+
       - name: Configure (Linux)
         if: runner.os == 'Linux'
         run: |
