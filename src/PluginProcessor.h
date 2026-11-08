@@ -9,11 +9,11 @@
 
 namespace ts
 {
-class TrackspacerAudioProcessor final : public juce::AudioProcessor
+class CarveSpaceAudioProcessor final : public juce::AudioProcessor
 {
 public:
-    TrackspacerAudioProcessor();
-    ~TrackspacerAudioProcessor() override = default;
+    CarveSpaceAudioProcessor();
+    ~CarveSpaceAudioProcessor() override = default;
 
     //==========================================================================
     void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) override;
@@ -24,11 +24,11 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "Trackspacer Clone"; }
+    const juce::String getName() const override { return "CarveSpace"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.2; }
+    double getTailLengthSeconds() const override { return 0.0; }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -46,6 +46,13 @@ public:
 
     bool isAdvancedPanelOpen() const noexcept { return advancedPanelOpen.load(); }
     void setAdvancedPanelOpen (bool shouldBeOpen) noexcept { advancedPanelOpen.store (shouldBeOpen); }
+
+    // --- Editor UI state, persisted with the session and in the user config ---
+    juce::String getUiTheme() const;
+    void setUiTheme (const juce::String& themeName);
+    int getSavedEditorWidth() const;
+    int getSavedEditorHeight() const;
+    void saveEditorSize (int width, int height);
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -66,7 +73,7 @@ private:
     std::atomic<bool> advancedPanelOpen { false };
     juce::AudioBuffer<float> sidechainScratch;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackspacerAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CarveSpaceAudioProcessor)
 };
 
 } // namespace ts

@@ -1,0 +1,283 @@
+# Build CarveSpace VST3 + Standalone (where applicable) on Linux, Windows and
+# Apple Silicon macOS.
+#
+# JUCE 7.0.5 is NOT vendored in this repository (it is gitignored), so every
+# job fetches a shallow clone of the exact JUCE tag it needs before configuring.
+#
+# Artifacts produced (one ready-to-use .zip per platform):
+#   CarveSpace-linux-x86_64.zip   -> CarveSpace.vst3/ + CarveSpace (Standalone)
+#   CarveSpace-windows-x64.zip    -> CarveSpace.vst3/
+#   CarveSpace-macos-arm64.zip    -> CarveSpace.vst3/
+#
+# The macOS bundle is unsigned and not notarised: users may have to
+# right-click-open / allow it in System Settings. See docs/BUILD.md.
+
+name: Build VST3
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token: this workflow only builds and uploads artifacts.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JUCE_VERSION: "7.0.5"
+  JUCE_REPO: "https://github.com/juce-framework/JUCE.git"
+  # Parallel compile jobs. JUCE + the bundled VST3 SDK are memory hungry, so
+  # stay conservative: never more than 6 (the project's agreed limit).
+  BUILD_JOBS: "4"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+
+    strategy:
+      # One platform failing must not hide the artifacts of the others.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-latest
+            artifact_name: CarveSpace-linux-x86_64
+            zip_name: CarveSpace-linux-x86_64.zip
+          - name: Windows x64
+            os: windows-latest
+            artifact_name: CarveSpace-windows-x64
+            zip_name: CarveSpace-windows-x64.zip
+          # macos-14 and macos-latest are both Apple Silicon (arm64).
+          # If GitHub retires macos-14, change os to macos-latest.
+          - name: macOS arm64 (Apple Silicon)
+            os: macos-14
+            artifact_name: CarveSpace-macos-arm64
+            zip_name: CarveSpace-macos-arm64.zip
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------------
+      # Dependencies
+      # ----------------------------------------------------------------------
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            zip \
+            libasound2-dev \
+            libx11-dev \
+            libxext-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxcomposite-dev \
+            libfreetype-dev \
+            libfontconfig1-dev \
+            libgl1-mesa-dev \
+            libcurl4-openssl-dev
+        # NOTE: the plugin is configured with JUCE_WEB_BROWSER=0 and
+        # JUCE_USE_CURL=0, so WebKit/curl/GTK are not actually linked today.
+        # JUCE 7.0.5's CMake probes webkit2gtk-4.0 and gtk+-x11-3.0
+        # optionally, and that probe is non-fatal when they are absent.
+
+      - name: Install optional Linux GUI/WebKit deps (best effort)
+        if: runner.os == 'Linux'
+        # Not needed by the current build (JUCE_WEB_BROWSER=0). Installed so
+        # that enabling a web UI later does not break CI; a missing package on
+        # a future Ubuntu release must not fail the whole job.
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev \
+            && (sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev \
+                || sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.0-dev) \
+            || echo "WebKit/GTK not installed - not required for this build."
+
+      - name: Ensure Ninja on macOS
+        if: runner.os == 'macOS'
+        run: command -v ninja >/dev/null 2>&1 || brew install ninja
+
+      - name: Set up MSVC (x64)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # ----------------------------------------------------------------------
+      # JUCE 7.0.5 (not committed to the repo)
+      # ----------------------------------------------------------------------
+      - name: Fetch JUCE ${{ env.JUCE_VERSION }} if missing
+        shell: bash
+        run: |
+          if [ -f JUCE/CMakeLists.txt ]; then
+            echo "JUCE already present (vendored or cached), skipping clone."
+          else
+            git clone --depth 1 --branch "$JUCE_VERSION" "$JUCE_REPO" JUCE
+          fi
+          git -C JUCE describe --tags --always 2>/dev/null || true
+
+      # ----------------------------------------------------------------------
+      # Configure + build
+      # ----------------------------------------------------------------------
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 + Standalone (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build --target CarveSpace_VST3 CarveSpace_Standalone \
+            --parallel "${BUILD_JOBS}"
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --build build --target CarveSpace_VST3 --parallel $env:BUILD_JOBS
+
+      - name: Configure (macOS, arm64)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build VST3 (macOS, arm64)
+        if: runner.os == 'macOS'
+        run: |
+          cmake --build build --target CarveSpace_VST3 --parallel "${BUILD_JOBS}"
+
+      # ----------------------------------------------------------------------
+      # Sanity checks: fail loudly if the bundle is empty / wrong arch
+      # ----------------------------------------------------------------------
+      - name: Verify VST3 bundle (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3"
+          bin="$bundle/Contents/x86_64-linux/CarveSpace.so"
+          standalone="build/CarveSpace_artefacts/Release/Standalone/CarveSpace"
+          test -d "$bundle"
+          test -s "$bin"
+          test -x "$standalone"
+          file "$bin"
+          file "$bin" | grep -q 'ELF 64-bit'
+          file "$standalone" | grep -q 'ELF 64-bit'
+
+      - name: Verify VST3 bundle (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3"
+          bin="$bundle/Contents/x86_64-win/CarveSpace.vst3"
+          test -d "$bundle"
+          test -s "$bin"
+          python -c "import sys; d=open(sys.argv[1],'rb').read(2); assert d==b'MZ', d; print('PE/DLL header OK')" "$bin"
+          ls -lR "$bundle"
+
+      - name: Verify VST3 bundle (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3"
+          bin="$bundle/Contents/MacOS/CarveSpace"
+          test -d "$bundle"
+          test -s "$bin"
+          file "$bin"
+          file "$bin" | grep -q 'arm64'
+          # Ad-hoc signature gives Gatekeeper a fighting chance on the user's Mac.
+          codesign --force --deep --sign - "$bundle" || true
+          codesign --verify --verbose=2 "$bundle" || true
+
+      # ----------------------------------------------------------------------
+      # Package: one ready-to-distribute .zip per platform
+      # ----------------------------------------------------------------------
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist dist-stage/linux
+          cp -R build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3 dist-stage/linux/
+          cp build/CarveSpace_artefacts/Release/Standalone/CarveSpace dist-stage/linux/
+          ( cd dist-stage/linux && zip -r -9 "$GITHUB_WORKSPACE/dist/${{ matrix.zip_name }}" CarveSpace.vst3 CarveSpace )
+          ls -lh "dist/${{ matrix.zip_name }}"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist, dist-stage/windows | Out-Null
+          Copy-Item -Recurse -Force build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3 dist-stage/windows/
+          Compress-Archive -Path dist-stage/windows/* -DestinationPath "dist/${{ matrix.zip_name }}" -Force
+          Get-Item "dist/${{ matrix.zip_name }}" | Format-List Name, Length
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist dist-stage/macos
+          cp -R build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3 dist-stage/macos/
+          # ditto keeps bundle metadata/permissions and the CarveSpace.vst3
+          # directory itself at the root of the zip.
+          ( cd dist-stage/macos && ditto -c -k --keepParent CarveSpace.vst3 "$GITHUB_WORKSPACE/dist/${{ matrix.zip_name }}" )
+          ls -lh "dist/${{ matrix.zip_name }}"
+
+      - name: Upload VST3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.zip_name }}
+          if-no-files-found: error
+          # The payload is already compressed; do not burn CPU re-compressing.
+          compression-level: 0
+          retention-days: 90
+
+      - name: Job summary
+        if: always()
+        # Never fail an otherwise-good build because the summary file could not
+        # be written (Windows bash + GITHUB_STEP_SUMMARY path edge cases).
+        continue-on-error: true
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.name }}"
+            echo ''
+            if [ -f "dist/${{ matrix.zip_name }}" ]; then
+              echo "Artifact: \`${{ matrix.artifact_name }}\` (\`${{ matrix.zip_name }}\`)"
+              if command -v sha256sum >/dev/null 2>&1; then
+                sha256sum "dist/${{ matrix.zip_name }}" || true
+              elif command -v shasum >/dev/null 2>&1; then
+                shasum -a 256 "dist/${{ matrix.zip_name }}" || true
+              fi
+            else
+              echo 'No artifact was produced.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || echo "warning: could not write job summary"

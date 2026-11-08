@@ -4,4 +4,11 @@ dist/
 *.wav
 *.png
 !docs/*.png
+!docs/screenshots/*.png
+!assets/*.png
 reference/audio/
+reference/screenshots/
+reference/clone_dump.txt
+
+__pycache__/
+*.pyc

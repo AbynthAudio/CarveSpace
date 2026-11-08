@@ -3,19 +3,19 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "PluginProcessor.h"
-#include "TrackspacerLookAndFeel.h"
+#include "CarveSpaceLookAndFeel.h"
 
 namespace ts
 {
-/** Dark spectrum display: sidechain spectrum in blue, applied reduction in
-    white, filter range shading and the little dot that opens the advanced
-    panel.
+/** Dark spectrum analyser panel: blue sidechain spectrum, white reduction curve,
+    log-frequency grid, low/high-cut shading, hover readout and the little blue
+    dot that opens the advanced panel.
 */
 class SpectrumDisplay : public juce::Component,
                         private juce::Timer
 {
 public:
-    explicit SpectrumDisplay (TrackspacerAudioProcessor& processorToUse);
+    explicit SpectrumDisplay (CarveSpaceAudioProcessor& processorToUse);
 
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& event) override;
@@ -24,34 +24,41 @@ public:
 
     std::function<void()> onAdvancedPanelToggle;
 
-    void setAdvancedPanelVisible (bool visible) { advancedPanelVisible = visible; repaint(); }
+    void setAdvancedPanelVisible (bool visible)
+    {
+        advancedPanelVisible = visible;
+        repaint();
+    }
+
+    static juce::Point<float> advancedDotPosition (juce::Rectangle<float> localBounds);
 
 private:
     void timerCallback() override;
 
     float xForFrequency (float frequencyHz) const;
+    float frequencyForX (float x) const;
     float yForSidechainDb (float db) const;
     float yForReductionDb (float db) const;
 
-    void drawGrid (juce::Graphics& g, juce::Rectangle<float> area);
-    void drawFilterRange (juce::Graphics& g, juce::Rectangle<float> area, const DisplayFrame& frame);
-    void drawCurves (juce::Graphics& g, juce::Rectangle<float> area, const DisplayFrame& frame);
-    void drawAdvancedDot (juce::Graphics& g, juce::Rectangle<float> area);
-    void drawHoverReadout (juce::Graphics& g, juce::Rectangle<float> area, const DisplayFrame& frame);
+    juce::Rectangle<float> plotArea() const;
 
-    static void buildSmoothPath (juce::Path& path,
-                                 const float* xValues,
-                                 const float* yValues,
-                                 int numPoints);
+    void drawGrid (juce::Graphics& g);
+    void drawFilterRange (juce::Graphics& g, const DisplayFrame& frame);
+    void drawCurves (juce::Graphics& g, const DisplayFrame& frame);
+    void drawAdvancedDot (juce::Graphics& g);
+    void drawHoverReadout (juce::Graphics& g, const DisplayFrame& frame);
 
-    TrackspacerAudioProcessor& processor;
+    static void buildSmoothPath (juce::Path& path, const float* xValues, const float* yValues, int numPoints);
 
-    DisplayFrame lastFrame;
+    CarveSpaceAudioProcessor& processor;
+
     DisplayFrame smoothedFrame;
     bool advancedPanelVisible = false;
 
     juce::Point<float> hoverPosition;
     bool hovering = false;
+
+    juce::Image panelGrain;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SpectrumDisplay)
 };

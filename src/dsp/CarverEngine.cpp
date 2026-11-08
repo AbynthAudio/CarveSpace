@@ -6,204 +6,487 @@ namespace ts
 {
 namespace
 {
-    // Sidechain level below which a band is considered silent. Bands at or
-    // above 0 dBFS get the full reduction.
-    constexpr float sidechainFloorDb = -54.0f;
-
-    // 2nd-order Butterworth (Q = 0.7071) for the low/high cut analysis filters.
     constexpr float cutFilterQ = 0.70710678f;
+    constexpr float analysisBandQ = 0.7f;
+    constexpr float peakingBandQ = 4.0f;
+    constexpr float boundaryRatio = 1.2495f;
 
-    float onePoleCoefficient (float timeMs, float sampleRate, float intervalSeconds)
+    inline float onePoleCoefficient (float timeMs, double sampleRate) noexcept
     {
-        const float tau = juce::jmax (0.01f, timeMs) * 0.001f;
-        return 1.0f - std::exp (-intervalSeconds / tau);
+        const float tauSeconds = juce::jmax (0.001f, timeMs) * 0.001f;
+        return 1.0f - std::exp (-1.0f / (tauSeconds * (float) sampleRate));
     }
 } // namespace
 
-CarverEngine::CarverEngine()
-    : analysisBuffer ((size_t) fftSize * 2, 0.0f),
-      msScratch ((size_t) fftSize * 2, 0.0f),
-      synthWindow ((size_t) fftSize, 0.0f),
-      spectrumIn ((size_t) fftSize),
-      spectrumOut ((size_t) fftSize),
-      inL ((size_t) fftSize, 0.0f),
-      inR ((size_t) fftSize, 0.0f),
-      scL ((size_t) fftSize, 0.0f),
-      scR ((size_t) fftSize, 0.0f),
-      accL ((size_t) fftSize, 0.0f),
-      accR ((size_t) fftSize, 0.0f),
-      outFifoL ((size_t) hopSize, 0.0f),
-      outFifoR ((size_t) hopSize, 0.0f),
-      outFifoScl ((size_t) hopSize, 0.0f),
-      outFifoScr ((size_t) hopSize, 0.0f)
+//==============================================================================
+CarverEngine::Biquad CarverEngine::Biquad::bandPass (double sampleRate, float frequency, float q) noexcept
 {
-    for (int i = 0; i < numBands; ++i)
-        displayBandFrequencies[(size_t) i] = BandAnalyzer::bandFrequency (i);
+    const double w0 = juce::MathConstants<double>::twoPi * (double) frequency / sampleRate;
+    const double alpha = std::sin (w0) / (2.0 * (double) q);
+    const double a0 = 1.0 + alpha;
 
-    // Hann analysis + synthesis window with overlap normalisation.
-    // Sum of squared Hann windows over hopSize shifts is 3 * fftSize / (8 * hopSize).
-    window.multiplyWithWindowingTable (synthWindow.data(), (size_t) fftSize);
-    const float normalisation = (float) hopSize * 8.0f / (3.0f * (float) fftSize);
+    Biquad result;
+    result.b0 = (float) (alpha / a0);
+    result.b1 = 0.0f;
+    result.b2 = (float) (-alpha / a0);
+    result.a1 = (float) (-2.0 * std::cos (w0) / a0);
+    result.a2 = (float) ((1.0 - alpha) / a0);
+    return result;
+}
 
-    for (auto& value : synthWindow)
-        value *= normalisation;
+CarverEngine::Biquad CarverEngine::Biquad::firstOrderHighPass (double sampleRate, float frequency) noexcept
+{
+    const double k = std::tan (juce::MathConstants<double>::pi * (double) frequency / sampleRate);
+    const double norm = 1.0 / (1.0 + k);
 
-    displayFrame.lowCutHz = 20.0f;
-    displayFrame.highCutHz = 20000.0f;
+    Biquad result;
+    result.b0 = (float) norm;
+    result.b1 = (float) -norm;
+    result.b2 = 0.0f;
+    result.a1 = (float) ((k - 1.0) * norm);
+    result.a2 = 0.0f;
+    return result;
+}
+
+CarverEngine::Biquad CarverEngine::Biquad::secondOrderLowPassButterworth (double sampleRate, float frequency) noexcept
+{
+    const double w0 = juce::MathConstants<double>::twoPi * (double) frequency / sampleRate;
+    const double alpha = std::sin (w0) / (2.0 * (double) cutFilterQ);
+    const double cosW0 = std::cos (w0);
+    const double a0 = 1.0 + alpha;
+
+    Biquad result;
+    result.b0 = (float) ((1.0 - cosW0) * 0.5 / a0);
+    result.b1 = (float) ((1.0 - cosW0) / a0);
+    result.b2 = result.b0;
+    result.a1 = (float) (-2.0 * cosW0 / a0);
+    result.a2 = (float) ((1.0 - alpha) / a0);
+    return result;
+}
+
+CarverEngine::Biquad CarverEngine::Biquad::peaking (double sampleRate, float frequency, float q, float gainDb) noexcept
+{
+    if (std::abs (gainDb) < 1.0e-4f)
+        return {};
+
+    const double A = std::pow (10.0, (double) gainDb / 40.0);
+    const double w0 = juce::MathConstants<double>::twoPi * (double) frequency / sampleRate;
+    const double alpha = std::sin (w0) / (2.0 * (double) q);
+    const double cosW0 = std::cos (w0);
+    const double a0 = 1.0 + alpha / A;
+
+    Biquad result;
+    result.b0 = (float) ((1.0 + alpha * A) / a0);
+    result.b1 = (float) (-2.0 * cosW0 / a0);
+    result.b2 = (float) ((1.0 - alpha * A) / a0);
+    result.a1 = result.b1;
+    result.a2 = (float) ((1.0 - alpha / A) / a0);
+    return result;
+}
+
+float CarverEngine::Biquad::peakingResponseDb (double sampleRate, float frequency, float q,
+                                               float gainDb, float atFrequency) noexcept
+{
+    const auto coefficients = peaking (sampleRate, frequency, q, gainDb);
+    const double w = juce::MathConstants<double>::twoPi * (double) atFrequency / sampleRate;
+    const std::complex<double> z1 = std::polar (1.0, -w);
+    const std::complex<double> z2 = z1 * z1;
+
+    const std::complex<double> numerator = (double) coefficients.b0
+                                           + (double) coefficients.b1 * z1
+                                           + (double) coefficients.b2 * z2;
+    const std::complex<double> denominator = 1.0
+                                             + (double) coefficients.a1 * z1
+                                             + (double) coefficients.a2 * z2;
+
+    const double magnitude = std::abs (numerator / denominator);
+    return (float) (20.0 * std::log10 (juce::jmax (1.0e-9, magnitude)));
+}
+
+//==============================================================================
+CarverEngine::CarverEngine()
+{
+    reset();
+}
+
+float CarverEngine::bandCentreFrequency (int band) noexcept
+{
+    const float lower = 18.0f * std::pow (boundaryRatio, (float) band);
+    return lower * std::sqrt (boundaryRatio);
 }
 
 void CarverEngine::prepare (double sampleRate)
 {
     sr = sampleRate > 0.0 ? sampleRate : 48000.0;
-    analyzer.prepare (sr);
+
+    for (int band = 0; band < numBands; ++band)
+    {
+        analysisBands[band] = Biquad::bandPass (sr, bandCentreFrequency (band), analysisBandQ);
+        analysisBands[band].reset();
+    }
+
+    // --- Normalisation of the series peaking cascade ----------------------
+    // R[i][k] is the dB response at band centre i of peaking filter k for a
+    // +1 dB gain.  Solve R * s = 1 so the summed curve has unit gain per unit
+    // target depth, then iterate with the actual -33 dB gain to compensate for
+    // the filter's gain nonlinearity.
+    constexpr int n = numBands;
+    double matrix[n][n + 1] {};
+
+    for (int i = 0; i < n; ++i)
+    {
+        for (int k = 0; k < n; ++k)
+            matrix[i][k] = (double) Biquad::peakingResponseDb (sr, bandCentreFrequency (k),
+                                                               peakingBandQ, 1.0f,
+                                                               bandCentreFrequency (i));
+
+        matrix[i][n] = 1.0;
+    }
+
+    // Gaussian elimination with partial pivoting.
+    for (int column = 0; column < n; ++column)
+    {
+        int pivot = column;
+
+        for (int row = column + 1; row < n; ++row)
+            if (std::abs (matrix[row][column]) > std::abs (matrix[pivot][column]))
+                pivot = row;
+
+        if (std::abs (matrix[pivot][column]) < 1.0e-12)
+            continue;
+
+        for (int k = column; k <= n; ++k)
+            std::swap (matrix[column][k], matrix[pivot][k]);
+
+        const double diagonal = matrix[column][column];
+
+        for (int k = column; k <= n; ++k)
+            matrix[column][k] /= diagonal;
+
+        for (int row = 0; row < n; ++row)
+        {
+            if (row == column)
+                continue;
+
+            const double factor = matrix[row][column];
+
+            if (std::abs (factor) < 1.0e-18)
+                continue;
+
+            for (int k = column; k <= n; ++k)
+                matrix[row][k] -= factor * matrix[column][k];
+        }
+    }
+
+    for (int band = 0; band < n; ++band)
+        bandScale[(size_t) band] = juce::jlimit (0.02f, 2.0f, (float) matrix[band][n]);
+
+    // Iteratively normalise so that full-depth (all bands -33 dB target)
+    // produces about -33 dB total at the band centres.
+    for (int iteration = 0; iteration < 3; ++iteration)
+    {
+        float worstDepth = 0.0f;
+
+        for (int i = 0; i < n; ++i)
+        {
+            float total = 0.0f;
+
+            for (int k = 0; k < n; ++k)
+                total += Biquad::peakingResponseDb (sr, bandCentreFrequency (k), peakingBandQ,
+                                                    -33.1f * bandScale[(size_t) k],
+                                                    bandCentreFrequency (i));
+
+            worstDepth = juce::jmax (worstDepth, -total);
+        }
+
+        if (worstDepth > 1.0e-3f)
+        {
+            const float correction = juce::jlimit (0.5f, 2.0f, 33.1f / worstDepth);
+
+            for (auto& scale : bandScale)
+                scale *= correction;
+        }
+    }
+
+    // Final calibration: the summed cascade loses a little depth because of
+    // the peaking filters' gain nonlinearity; compensate globally.
+    for (auto& scale : bandScale)
+        scale *= 1.12f;
+
+    for (int channel = 0; channel < 2; ++channel)
+        for (int band = 0; band < numBands; ++band)
+            peakingBands[channel][band] = Biquad {};
+
+    currentLowCut = -1.0f;
+    currentHighCut = -1.0f;
     reset();
 }
 
 void CarverEngine::reset()
 {
-    std::fill (inL.begin(), inL.end(), 0.0f);
-    std::fill (inR.begin(), inR.end(), 0.0f);
-    std::fill (scL.begin(), scL.end(), 0.0f);
-    std::fill (scR.begin(), scR.end(), 0.0f);
-    std::fill (accL.begin(), accL.end(), 0.0f);
-    std::fill (accR.begin(), accR.end(), 0.0f);
-    std::fill (outFifoL.begin(), outFifoL.end(), 0.0f);
-    std::fill (outFifoR.begin(), outFifoR.end(), 0.0f);
-    std::fill (outFifoScl.begin(), outFifoScl.end(), 0.0f);
-    std::fill (outFifoScr.begin(), outFifoScr.end(), 0.0f);
-    outFifoPos = hopSize;
-    inWrite = 0;
-    totalSamples = 0;
-    currentReductionDb.fill (0.0f);
-    targetReductionDb.fill (0.0f);
-    sidechainBandDb.fill (-100.0f);
-    hpfL.reset(); hpfR.reset(); lpfL.reset(); lpfR.reset();
-    currentLowCut = -1.0f;
-    currentHighCut = -1.0f;
+    for (int channel = 0; channel < 2; ++channel)
+    {
+        for (int band = 0; band < numBands; ++band)
+        {
+            peakingBands[channel][band] = Biquad {};
+            gainDbCurrent[channel][band] = 0.0f;
+            gainDbTarget[channel][band] = 0.0f;
+        }
+
+        scHighPass[channel].reset();
+        scLowPass[channel].reset();
+    }
+
+    for (int band = 0; band < numBands; ++band)
+    {
+        analysisBands[band].reset();
+        envelope[(size_t) band] = 0.0f;
+        bandN[(size_t) band] = 0.0f;
+        bandDisplayDb[(size_t) band] = -100.0f;
+    }
+
+    displayCounter = 0;
+    samplesUntilControl = 0;
+    samplesUntilCoefficients = 0;
+
+    displayFrame.lowCutHz = 20.0f;
+    displayFrame.highCutHz = 20000.0f;
+
+    for (int band = 0; band < numBands; ++band)
+    {
+        displayFrame.bandFrequenciesHz[band] = bandCentreFrequency (band);
+        displayFrame.sidechainDb[band] = -100.0f;
+        displayFrame.reductionDb[band] = 0.0f;
+    }
 }
 
-void CarverEngine::updateFilters (const CarverSettings& settings)
+void CarverEngine::updateCutFilters (const CarverSettings& settings)
 {
-    const float low = juce::jlimit (20.0f, 20000.0f, settings.lowCutHz);
-    const float high = juce::jlimit (20.0f, 20000.0f, settings.highCutHz);
+    const float low = juce::jlimit (params::cutMin, params::cutMax, settings.lowCutHz);
+    const float high = juce::jlimit (params::cutMin, params::cutMax, settings.highCutHz);
 
     if (std::abs (low - currentLowCut) > 0.01f)
     {
         currentLowCut = low;
-        auto coefficients = juce::dsp::IIR::Coefficients<float>::makeHighPass (sr, low, cutFilterQ);
-        *hpfL.coefficients = *coefficients;
-        *hpfR.coefficients = *coefficients;
-        hpfL.reset();
-        hpfR.reset();
+        const auto coefficients = Biquad::firstOrderHighPass (sr, low);
+        for (auto& filter : scHighPass)
+        {
+            filter = coefficients;
+            filter.reset();
+        }
     }
 
     if (std::abs (high - currentHighCut) > 0.01f)
     {
         currentHighCut = high;
-        auto coefficients = juce::dsp::IIR::Coefficients<float>::makeLowPass (sr, high, cutFilterQ);
-        *lpfL.coefficients = *coefficients;
-        *lpfR.coefficients = *coefficients;
-        lpfL.reset();
-        lpfR.reset();
+        const auto coefficients = Biquad::secondOrderLowPassButterworth (sr, high);
+        for (auto& filter : scLowPass)
+        {
+            filter = coefficients;
+            filter.reset();
+        }
     }
 }
 
+//==============================================================================
+float CarverEngine::depthDbForLevel (float levelDb, float amountNorm) noexcept
+{
+    if (amountNorm <= 1.0e-5f)
+        return 0.0f;
+
+    const float threshold = -43.5f - 42.0f * std::log10 (amountNorm);
+    const float depth = 33.10f / (1.0f + std::exp (-(levelDb - threshold) / 3.75f));
+    return juce::jlimit (0.0f, 33.10f, depth);
+}
+
+void CarverEngine::updateControl (const CarverSettings& settings)
+{
+    if (settings.freeze)
+        return;
+
+    const float amountNorm = juce::jlimit (0.0f, 1.0f, settings.amountPercent / 100.0f);
+    const float panNorm = juce::jlimit (-1.0f, 1.0f, (settings.pan - 50.0f) / 50.0f);
+    const float weightA = juce::jlimit (0.0f, 1.0f, 1.0f - panNorm);
+    const float weightB = juce::jlimit (0.0f, 1.0f, 1.0f + panNorm);
+    const float weights[2] = { weightA, weightB };
+
+    for (int band = 0; band < numBands; ++band)
+    {
+        const float levelDb = juce::Decibels::gainToDecibels (envelope[(size_t) band], -120.0f);
+        bandDisplayDb[(size_t) band] = levelDb;
+
+        const float depthDb = depthDbForLevel (levelDb, amountNorm);
+
+        // Small depth-dependent compensation: the peaking cascade loses a
+        // little depth in the transition region (measured against the
+        // reference), more so at low depths than at full depth.
+        const float compensation = 1.45f - 0.36f * (depthDb / 33.10f);
+
+        bandN[(size_t) band] = juce::jlimit (0.0f, 1.0f, depthDb * compensation / 33.10f);
+
+        for (int channel = 0; channel < 2; ++channel)
+            gainDbTarget[channel][band] = -depthDb * compensation
+                                          * bandScale[(size_t) band] * weights[channel];
+    }
+}
+
+void CarverEngine::updateCoefficients()
+{
+    for (int channel = 0; channel < 2; ++channel)
+    {
+        for (int band = 0; band < numBands; ++band)
+        {
+            const float gainDb = gainDbCurrent[channel][band];
+
+            if (std::abs (gainDb) < 1.0e-4f)
+            {
+                peakingBands[channel][band] = Biquad {};
+                continue;
+            }
+
+            auto& filter = peakingBands[channel][band];
+            const auto newCoefficients = Biquad::peaking (sr, bandCentreFrequency (band),
+                                                          peakingBandQ, gainDb);
+
+            filter.b0 = newCoefficients.b0;
+            filter.b1 = newCoefficients.b1;
+            filter.b2 = newCoefficients.b2;
+            filter.a1 = newCoefficients.a1;
+            filter.a2 = newCoefficients.a2;
+        }
+    }
+}
+
+//==============================================================================
 void CarverEngine::process (juce::AudioBuffer<float>& main,
                             const juce::AudioBuffer<float>& sidechain,
                             int numSamples,
                             const CarverSettings& settings)
 {
-    updateFilters (settings);
+    updateCutFilters (settings);
 
-    cachedMode = settings.mode;
-    cachedPan = settings.pan;
+    // Fast peak detector; the reference's Attack control is deliberately weak
+    // (measured onset stays in the 3-7 ms range), so the detector attack is
+    // clamped to a fast value and the parameter mainly shapes the gain ramp.
+    const float attackCoeff = onePoleCoefficient (juce::jmin (settings.attackMs, 0.8f), sr);
+    const float releaseCoeff = onePoleCoefficient (settings.releaseMs * 1.55f, sr);
 
-    const bool stereoOut = main.getNumChannels() > 1;
+    const bool stereo = main.getNumChannels() > 1;
     auto* mainL = main.getWritePointer (0);
-    auto* mainR = stereoOut ? main.getWritePointer (1) : mainL;
+    auto* mainR = stereo ? main.getWritePointer (1) : mainL;
 
-    const bool haveSidechain = sidechain.getNumChannels() > 0;
-    const float* scLeft = nullptr;
-    const float* scRight = nullptr;
+    const bool externalSidechain = sidechain.getNumChannels() > 0
+                                   && sidechain.getNumSamples() >= numSamples;
 
-    if (haveSidechain)
-    {
-        scLeft = sidechain.getReadPointer (0);
-        scRight = sidechain.getNumChannels() > 1 ? sidechain.getReadPointer (1) : scLeft;
-    }
-    else
-    {
-        scLeft = mainL;
-        scRight = mainR;
-    }
+    const float* scL = externalSidechain ? sidechain.getReadPointer (0) : mainL;
+    const float* scR = externalSidechain
+                           ? (sidechain.getNumChannels() > 1 ? sidechain.getReadPointer (1) : scL)
+                           : mainR;
 
-    const float hopSeconds = (float) hopSize / (float) sr;
-    const float attackCoeff = onePoleCoefficient (settings.attackMs, (float) sr, hopSeconds);
-    const float releaseCoeff = onePoleCoefficient (settings.releaseMs, (float) sr, hopSeconds);
+    const bool midSide = settings.mode != 0;
 
     for (int i = 0; i < numSamples; ++i)
     {
-        // Read the input sample before overwriting the buffer.
         const float inputL = mainL[i];
-        const float inputR = stereoOut ? mainR[i] : inputL;
+        const float inputR = stereo ? mainR[i] : inputL;
 
-        // Emit the delayed sample.
-        if (outFifoPos < hopSize)
+        float scLeft = scL[i];
+        float scRight = scR[i];
+
+        scLeft = scLowPass[0].process (scHighPass[0].process (scLeft));
+        scRight = scLowPass[1].process (scHighPass[1].process (scRight));
+        const float sideMono = 0.5f * (scLeft + scRight);
+
+        for (int band = 0; band < numBands; ++band)
         {
-            const float outL = settings.scAudition ? outFifoScl[(size_t) outFifoPos] : outFifoL[(size_t) outFifoPos];
-            const float outR = settings.scAudition ? outFifoScr[(size_t) outFifoPos] : outFifoR[(size_t) outFifoPos];
-            mainL[i] = outL;
-            if (stereoOut)
-                mainR[i] = outR;
-            ++outFifoPos;
+            const float bandOutput = analysisBands[band].process (sideMono);
+            const float rectified = std::abs (bandOutput);
+            const bool rising = rectified > envelope[(size_t) band];
+            envelope[(size_t) band] += (rectified - envelope[(size_t) band])
+                                       * (rising ? attackCoeff : releaseCoeff);
+        }
+
+        if (samplesUntilControl <= 0)
+        {
+            updateControl (settings);
+            samplesUntilControl = controlInterval;
+        }
+
+        --samplesUntilControl;
+
+        for (int band = 0; band < numBands; ++band)
+        {
+            for (int channel = 0; channel < 2; ++channel)
+            {
+                const float target = gainDbTarget[channel][band];
+                gainDbCurrent[channel][band] += (target - gainDbCurrent[channel][band])
+                                                / (float) controlInterval;
+            }
+        }
+
+        if (samplesUntilCoefficients <= 0)
+        {
+            updateCoefficients();
+            samplesUntilCoefficients = coefficientInterval;
+        }
+
+        --samplesUntilCoefficients;
+
+        float outputL;
+        float outputR;
+
+        if (settings.scAudition)
+        {
+            outputL = scLeft;
+            outputR = scRight;
+        }
+        else if (! midSide)
+        {
+            float left = inputL;
+            float right = inputR;
+
+            for (int band = 0; band < numBands; ++band)
+            {
+                left = peakingBands[0][band].process (left);
+                right = peakingBands[1][band].process (right);
+            }
+
+            outputL = left;
+            outputR = right;
         }
         else
         {
-            mainL[i] = 0.0f;
-            if (stereoOut)
-                mainR[i] = 0.0f;
+            const float midIn = 0.5f * (inputL + inputR);
+            const float sideIn = 0.5f * (inputL - inputR);
+
+            float mid = midIn;
+            float side = sideIn;
+
+            for (int band = 0; band < numBands; ++band)
+            {
+                mid = peakingBands[0][band].process (mid);
+                side = peakingBands[1][band].process (side);
+            }
+
+            outputL = mid + side;
+            outputR = mid - side;
         }
 
-        // Push new samples into the rings, filtering the sidechain.
-        inL[(size_t) inWrite] = inputL;
-        inR[(size_t) inWrite] = inputR;
+        mainL[i] = outputL;
+        if (stereo)
+            mainR[i] = outputR;
 
-        const float rawScL = haveSidechain ? scLeft[i] : inputL;
-        const float rawScR = haveSidechain ? scRight[i] : inputR;
-        scL[(size_t) inWrite] = lpfL.processSample (hpfL.processSample (rawScL));
-        scR[(size_t) inWrite] = lpfR.processSample (hpfR.processSample (rawScR));
-
-        inWrite = (inWrite + 1) % fftSize;
-        ++totalSamples;
-
-        if (totalSamples % hopSize == 0)
+        if (++displayCounter >= 64)
         {
-            if (! settings.freeze)
-            {
-                processHop (settings);
-
-                for (int band = 0; band < numBands; ++band)
-                {
-                    const float target = targetReductionDb[(size_t) band];
-                    const float current = currentReductionDb[(size_t) band];
-                    const float coefficient = (target < current) ? attackCoeff : releaseCoeff;
-                    currentReductionDb[(size_t) band] = current + (target - current) * coefficient;
-                }
-            }
-            else
-            {
-                // Freeze: keep analysing for the display, but hold the gains.
-                processHop (settings);
-            }
-
-            if (totalSamples >= fftSize)
-                renderHop();
-            else
-                outFifoPos = hopSize;
+            displayCounter = 0;
+            updateDisplay (settings);
         }
     }
+}
 
-    // Publish a display snapshot.
+//==============================================================================
+void CarverEngine::updateDisplay (const CarverSettings& settings)
+{
     DisplayFrame frame;
     frame.lowCutHz = settings.lowCutHz;
     frame.highCutHz = settings.highCutHz;
@@ -212,9 +495,9 @@ void CarverEngine::process (juce::AudioBuffer<float>& main,
 
     for (int band = 0; band < numBands; ++band)
     {
-        frame.bandFrequenciesHz[band] = displayBandFrequencies[(size_t) band];
-        frame.sidechainDb[band] = sidechainBandDb[(size_t) band];
-        frame.reductionDb[band] = currentReductionDb[(size_t) band];
+        frame.bandFrequenciesHz[band] = bandCentreFrequency (band);
+        frame.sidechainDb[band] = bandDisplayDb[(size_t) band];
+        frame.reductionDb[band] = -33.10f * bandN[(size_t) band];
     }
 
     {
@@ -223,144 +506,7 @@ void CarverEngine::process (juce::AudioBuffer<float>& main,
     }
 }
 
-void CarverEngine::processHop (const CarverSettings& settings)
-{
-    // Analyse the filtered sidechain as a mono sum into 32 bands.
-    const int start = inWrite; // oldest sample of the current window
-
-    for (int i = 0; i < fftSize; ++i)
-    {
-        const int index = (start + i) % fftSize;
-        analysisBuffer[(size_t) i] = 0.5f * (scL[(size_t) index] + scR[(size_t) index]);
-    }
-
-    analyzer.analyze (analysisBuffer.data(), sidechainBandDb.data());
-
-    if (! settings.freeze)
-    {
-        const float depthDb = maxReductionDb * juce::jlimit (0.0f, 1.0f, settings.amountPercent / 100.0f);
-
-        for (int band = 0; band < numBands; ++band)
-        {
-            const float level = sidechainBandDb[(size_t) band];
-            const float weight = juce::jlimit (0.0f, 1.0f,
-                                               (level - sidechainFloorDb) / (0.0f - sidechainFloorDb));
-            targetReductionDb[(size_t) band] = depthDb * weight;
-        }
-    }
-}
-
-float CarverEngine::bandGainDbForFrequency (float frequencyHz) const noexcept
-{
-    constexpr float low = 20.0f;
-    constexpr float high = 20000.0f;
-    constexpr float ratio = high / low;
-
-    if (frequencyHz <= low)
-        return currentReductionDb[0];
-
-    if (frequencyHz >= high)
-        return currentReductionDb[(size_t) (numBands - 1)];
-
-    const float position = std::log (frequencyHz / low) / std::log (ratio) * (float) (numBands - 1);
-    const int lower = juce::jlimit (0, numBands - 2, (int) std::floor (position));
-    const float fraction = position - (float) lower;
-
-    return currentReductionDb[(size_t) lower]
-         + (currentReductionDb[(size_t) (lower + 1)] - currentReductionDb[(size_t) lower]) * fraction;
-}
-
-void CarverEngine::renderHop()
-{
-    const int start = inWrite;
-
-    // Delayed filtered sidechain (used by SC Audition).
-    for (int i = 0; i < hopSize; ++i)
-    {
-        const int index = (start + i) % fftSize;
-        outFifoScl[(size_t) i] = scL[(size_t) index];
-        outFifoScr[(size_t) i] = scR[(size_t) index];
-    }
-
-    const bool midSide = (cachedMode != 0);
-    const float panNorm = juce::jlimit (-1.0f, 1.0f, cachedPan / 100.0f);
-    const float weightA = juce::jlimit (0.0f, 1.0f, 1.0f - panNorm); // left / mid
-    const float weightB = juce::jlimit (0.0f, 1.0f, 1.0f + panNorm); // right / side
-
-    for (int ch = 0; ch < 2; ++ch)
-    {
-        for (int i = 0; i < fftSize; ++i)
-        {
-            const int index = (start + i) % fftSize;
-            const float l = inL[(size_t) index];
-            const float r = inR[(size_t) index];
-            analysisBuffer[(size_t) i] = midSide ? (ch == 0 ? 0.5f * (l + r) : 0.5f * (l - r))
-                                                 : (ch == 0 ? l : r);
-        }
-
-        window.multiplyWithWindowingTable (analysisBuffer.data(), (size_t) fftSize);
-
-        for (int i = 0; i < fftSize; ++i)
-            spectrumIn[(size_t) i] = Complex (analysisBuffer[(size_t) i], 0.0f);
-
-        fft.perform (spectrumIn.data(), spectrumOut.data(), false);
-
-        const float channelWeight = (ch == 0 ? weightA : weightB);
-        const int positiveBins = fftSize / 2;
-
-        spectrumOut[0] *= channelWeight;
-
-        for (int bin = 1; bin <= positiveBins; ++bin)
-        {
-            const float frequency = (float) bin * (float) sr / (float) fftSize;
-            const float gainDb = bandGainDbForFrequency (frequency) * channelWeight;
-            const float gain = juce::Decibels::decibelsToGain (gainDb);
-            spectrumOut[(size_t) bin] *= gain;
-
-            if (bin < positiveBins)
-                spectrumOut[(size_t) (fftSize - bin)] *= gain;
-        }
-
-        fft.perform (spectrumOut.data(), spectrumIn.data(), true);
-
-        for (int i = 0; i < fftSize; ++i)
-            msScratch[(size_t) (ch * fftSize + i)] = spectrumIn[(size_t) i].real() * synthWindow[(size_t) i];
-    }
-
-    if (midSide)
-    {
-        for (int i = 0; i < fftSize; ++i)
-        {
-            const int index = (start + i) % fftSize;
-            const float m = msScratch[(size_t) i];
-            const float s = msScratch[(size_t) (fftSize + i)];
-            accL[(size_t) index] += m + s;
-            accR[(size_t) index] += m - s;
-        }
-    }
-    else
-    {
-        for (int i = 0; i < fftSize; ++i)
-        {
-            const int index = (start + i) % fftSize;
-            accL[(size_t) index] += msScratch[(size_t) i];
-            accR[(size_t) index] += msScratch[(size_t) (fftSize + i)];
-        }
-    }
-
-    // Emit hopSize samples and clear the consumed region.
-    for (int i = 0; i < hopSize; ++i)
-    {
-        const int index = (start + i) % fftSize;
-        outFifoL[(size_t) i] = accL[(size_t) index];
-        outFifoR[(size_t) i] = accR[(size_t) index];
-        accL[(size_t) index] = 0.0f;
-        accR[(size_t) index] = 0.0f;
-    }
-
-    outFifoPos = 0;
-}
-
+//==============================================================================
 void CarverEngine::getDisplayFrame (DisplayFrame& destination) const
 {
     const juce::SpinLock::ScopedLockType lock (displayLock);

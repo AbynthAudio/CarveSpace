@@ -2,7 +2,7 @@
 
 namespace ts
 {
-TrackspacerAudioProcessorEditor::TrackspacerAudioProcessorEditor (TrackspacerAudioProcessor& processorToUse)
+CarveSpaceAudioProcessorEditor::CarveSpaceAudioProcessorEditor (CarveSpaceAudioProcessor& processorToUse)
     : juce::AudioProcessorEditor (&processorToUse),
       processor (processorToUse),
       spectrumDisplay (processorToUse),
@@ -20,6 +20,10 @@ TrackspacerAudioProcessorEditor::TrackspacerAudioProcessorEditor (TrackspacerAud
     content.addChildComponent (advancedPanel);
     advancedPanel.setVisible (false);
 
+    amountKnob.setDiscScale (layout::amountDiscScale);
+    lowCutKnob.setDiscScale (layout::smallDiscScale);
+    highCutKnob.setDiscScale (layout::smallDiscScale);
+
     content.addAndMakeVisible (amountKnob);
     content.addAndMakeVisible (lowCutKnob);
     content.addAndMakeVisible (highCutKnob);
@@ -27,11 +31,12 @@ TrackspacerAudioProcessorEditor::TrackspacerAudioProcessorEditor (TrackspacerAud
     freezeButton.setLookAndFeel (&lookAndFeel);
     freezeButton.setButtonText ("");
     freezeButton.setTooltip ("Freeze the current reduction curve");
+    freezeButton.setMouseCursor (juce::MouseCursor::PointingHandCursor);
     content.addAndMakeVisible (freezeButton);
 
     amountKnob.setTooltip ("Amount of reduction applied to the main signal");
-    lowCutKnob.setTooltip ("Low-cut filter for the processed range");
-    highCutKnob.setTooltip ("High-cut filter for the processed range");
+    lowCutKnob.setTooltip ("Low-cut: lower limit of the processed range");
+    highCutKnob.setTooltip ("High-cut: upper limit of the processed range");
 
     amountAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         processor.apvts, params::amount, amountKnob);
@@ -46,21 +51,97 @@ TrackspacerAudioProcessorEditor::TrackspacerAudioProcessorEditor (TrackspacerAud
     lowCutKnob.setDoubleClickReturnValue (true, params::lowCutDefault);
     highCutKnob.setDoubleClickReturnValue (true, params::highCutDefault);
 
+    // Always-visible skin switcher (left click cycles, right click opens the list).
+    content.addAndMakeVisible (skinButton);
+    skinButton.onClick = [this] { cycleTheme(); };
+    skinButton.onSecondaryClick = [this] { showThemeMenu (&skinButton); };
+
+    applyEnvironmentParameterOverrides();
+
     spectrumDisplay.onAdvancedPanelToggle = [this] { setAdvancedPanelOpen (true); };
     advancedPanel.onClose = [this] { setAdvancedPanelOpen (false); };
     background.onLogoClicked = [this] { showInfoMenu(); };
 
-    setSize (designWidth, designHeight);
     setResizable (true, true);
     setResizeLimits (325, 325, 1300, 1300);
-    if (auto* constrainer = getConstrainer())
-        constrainer->setFixedAspectRatio (1.0);
 
+    if (auto* boundsConstrainer = getConstrainer())
+        boundsConstrainer->setFixedAspectRatio (1.0);
+
+    // ---- restored editor size (square, 325 .. 1300) ------------------------
+    {
+        const int savedWidth = processor.getSavedEditorWidth();
+        const int savedHeight = processor.getSavedEditorHeight();
+        const int side = juce::jlimit (325, 1300, juce::jmax (savedWidth, savedHeight));
+
+        setSize (side, side);
+        pendingEditorSize = { side, side };
+    }
+
+    // ---- theme (session state first, else user config, else dark) ----------
+    ThemeId initialTheme = theme::fromString (processor.getUiTheme());
+
+    bool themeForcedByEnvironment = false;
+    const auto envTheme = juce::SystemStats::getEnvironmentVariable ("CARVESPACE_THEME", {});
+
+    if (envTheme.isNotEmpty())
+    {
+        initialTheme = theme::fromString (envTheme);
+        themeForcedByEnvironment = true;
+    }
+
+    themeLockedByEnvironment = themeForcedByEnvironment;
+
+    applyTheme (initialTheme);
+
+    if (! themeForcedByEnvironment)
+        processor.setUiTheme (theme::toString (initialTheme));
+
+    // Test hook: force a specific editor size (e.g. CARVESPACE_EDITOR_SIZE=975).
+    {
+        const auto sizeText = juce::SystemStats::getEnvironmentVariable ("CARVESPACE_EDITOR_SIZE", {});
+
+        if (sizeText.isNotEmpty())
+        {
+            const int side = juce::jlimit (325, 1300, sizeText.getIntValue());
+
+            if (side > 0)
+            {
+                setSize (side, side);
+                pendingEditorSize = { side, side };
+            }
+        }
+    }
+
+    // Test hook: persist the current UI state immediately (persistence testing).
+    if (juce::SystemStats::getEnvironmentVariable ("CARVESPACE_PERSIST_UI", {}) == "1")
+    {
+        themeLockedByEnvironment = false;
+        persistThemeChoice (initialTheme);
+    }
+
+    // Screenshot / testing hook: open the advanced panel on construction.
+    const auto advancedFlag = juce::SystemStats::getEnvironmentVariable ("CARVESPACE_SHOW_ADVANCED", {});
+    const auto legacyFlag = juce::SystemStats::getEnvironmentVariable ("TRACKSPACER_SHOW_ADVANCED", {});
+
+    if (advancedFlag == "1" || legacyFlag == "1")
+        setAdvancedPanelOpen (true);
+
+    // Screenshot hook for the About dialog.
+    if (juce::SystemStats::getEnvironmentVariable ("CARVESPACE_SHOW_ABOUT", {}) == "1")
+        juce::MessageManager::callAsync ([this] { showAboutDialog(); });
+
+    startTimer (600);
     resized();
 }
 
-TrackspacerAudioProcessorEditor::~TrackspacerAudioProcessorEditor()
+CarveSpaceAudioProcessorEditor::~CarveSpaceAudioProcessorEditor()
 {
+    stopTimer();
+
+    if (editorSizeDirty)
+        processor.saveEditorSize (pendingEditorSize.x, pendingEditorSize.y);
+
     amountAttachment.reset();
     lowCutAttachment.reset();
     highCutAttachment.reset();
@@ -74,20 +155,16 @@ TrackspacerAudioProcessorEditor::~TrackspacerAudioProcessorEditor()
     setLookAndFeel (nullptr);
 }
 
-juce::Rectangle<float> TrackspacerAudioProcessorEditor::designBoundsFor (int x, int y, int w, int h) const
+void CarveSpaceAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    return juce::Rectangle<float> ((float) x, (float) y, (float) w, (float) h);
+    g.fillAll (theme::palette().windowBg);
 }
 
-void TrackspacerAudioProcessorEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (juce::Colour (0xff1b1b1d));
-}
-
-void TrackspacerAudioProcessorEditor::resized()
+void CarveSpaceAudioProcessorEditor::resized()
 {
     const float scale = juce::jmin ((float) getWidth() / (float) designWidth,
                                     (float) getHeight() / (float) designHeight);
+
     const float offsetX = ((float) getWidth() - (float) designWidth * scale) * 0.5f;
     const float offsetY = ((float) getHeight() - (float) designHeight * scale) * 0.5f;
 
@@ -95,16 +172,126 @@ void TrackspacerAudioProcessorEditor::resized()
     content.setTransform (juce::AffineTransform::scale (scale).translated (offsetX, offsetY));
 
     background.setBounds (0, 0, designWidth, designHeight);
-    spectrumDisplay.setBounds (50, 57, 548, 196);
-    advancedPanel.setBounds (50, 57, 548, 196);
+    spectrumDisplay.setBounds (layout::display.toNearestInt());
+    advancedPanel.setBounds (layout::display.toNearestInt());
 
-    amountKnob.setBounds (223, 258, 204, 204);
-    lowCutKnob.setBounds (51, 437, 137, 137);
-    highCutKnob.setBounds (457, 433, 145, 145);
-    freezeButton.setBounds (92, 317, 36, 36);
+    amountKnob.setBounds (layout::amountKnob.toNearestInt());
+    lowCutKnob.setBounds (layout::lowCutKnob.toNearestInt());
+    highCutKnob.setBounds (layout::highCutKnob.toNearestInt());
+    freezeButton.setBounds (layout::freezeButton.toNearestInt());
+    skinButton.setBounds (layout::skinButton.toNearestInt());
+
+    // The processor persists the window size (debounced in timerCallback).
+    pendingEditorSize = { getWidth(), getHeight() };
+    editorSizeDirty = true;
 }
 
-void TrackspacerAudioProcessorEditor::setAdvancedPanelOpen (bool shouldOpen)
+//==============================================================================
+
+void CarveSpaceAudioProcessorEditor::applyTheme (ThemeId newTheme)
+{
+    theme::setTheme (newTheme);
+    currentTheme = newTheme;
+    lookAndFeel.refreshTheme();
+    skinButton.setTooltip ("Theme: " + currentThemeName() + " - click to cycle Dark / Light / Pink");
+    repaintEverything();
+}
+
+juce::String CarveSpaceAudioProcessorEditor::currentThemeName() const
+{
+    const auto name = theme::toString (currentTheme);
+    return name.substring (0, 1).toUpperCase() + name.substring (1);
+}
+
+void CarveSpaceAudioProcessorEditor::cycleTheme()
+{
+    ThemeId next = ThemeId::dark;
+
+    switch (currentTheme)
+    {
+        case ThemeId::dark:  next = ThemeId::light; break;
+        case ThemeId::light: next = ThemeId::pink;  break;
+        case ThemeId::pink:  next = ThemeId::dark;  break;
+    }
+
+    applyTheme (next);
+    persistThemeChoice (next);
+}
+
+void CarveSpaceAudioProcessorEditor::applyEnvironmentParameterOverrides()
+{
+    // Test / screenshot hooks: drive parameters to specific values.
+    auto setParam = [this] (const char* envName, juce::RangedAudioParameter* parameter)
+    {
+        if (parameter == nullptr)
+            return;
+
+        const auto text = juce::SystemStats::getEnvironmentVariable (envName, {});
+
+        if (text.isEmpty())
+            return;
+
+        const float realValue = text.getFloatValue();
+        parameter->setValueNotifyingHost (parameter->convertTo0to1 (realValue));
+    };
+
+    setParam ("CARVESPACE_AMOUNT", processor.amountParam);
+    setParam ("CARVESPACE_LOWCUT", processor.lowCutParam);
+    setParam ("CARVESPACE_HIGHCUT", processor.highCutParam);
+    setParam ("CARVESPACE_PAN", processor.panParam);
+    setParam ("CARVESPACE_ATTACK", processor.attackParam);
+    setParam ("CARVESPACE_RELEASE", processor.releaseParam);
+
+    const auto freezeFlag = juce::SystemStats::getEnvironmentVariable ("CARVESPACE_FREEZE", {});
+
+    if (freezeFlag == "1" && processor.freezeParam != nullptr)
+        processor.freezeParam->setValueNotifyingHost (1.0f);
+}
+
+void CarveSpaceAudioProcessorEditor::persistThemeChoice (ThemeId newTheme)
+{
+    themeLockedByEnvironment = false;
+    processor.setUiTheme (theme::toString (newTheme));
+    processor.saveEditorSize (getWidth(), getHeight());
+    editorSizeDirty = false;
+}
+
+void CarveSpaceAudioProcessorEditor::repaintEverything()
+{
+    background.repaint();
+    spectrumDisplay.repaint();
+    advancedPanel.repaint();
+    amountKnob.repaint();
+    lowCutKnob.repaint();
+    highCutKnob.repaint();
+    freezeButton.repaint();
+    content.repaint();
+    repaint();
+}
+
+void CarveSpaceAudioProcessorEditor::timerCallback()
+{
+    // Pick up a theme restored later by the host (session state can be loaded
+    // after the editor has already been created).
+    if (! themeLockedByEnvironment)
+    {
+        const auto restored = theme::fromString (processor.getUiTheme());
+
+        if (restored != currentTheme)
+            applyTheme (restored);
+    }
+
+    // Debounced editor-size persistence (avoids writing the config on every
+    // pixel of a window drag).
+    if (editorSizeDirty)
+    {
+        processor.saveEditorSize (pendingEditorSize.x, pendingEditorSize.y);
+        editorSizeDirty = false;
+    }
+}
+
+//==============================================================================
+void CarveSpaceAudioProcessorEditor::setAdvancedPanelOpen (bool shouldOpen)
 {
     processor.setAdvancedPanelOpen (shouldOpen);
     advancedPanel.setVisible (shouldOpen);
@@ -116,46 +303,82 @@ void TrackspacerAudioProcessorEditor::setAdvancedPanelOpen (bool shouldOpen)
         spectrumDisplay.repaint();
 }
 
-void TrackspacerAudioProcessorEditor::showInfoMenu()
+void CarveSpaceAudioProcessorEditor::showThemeMenu (juce::Component* target)
+{
+    juce::PopupMenu themeMenu;
+    themeMenu.addItem (100, "Dark", true, currentTheme == ThemeId::dark);
+    themeMenu.addItem (101, "Light", true, currentTheme == ThemeId::light);
+    themeMenu.addItem (102, "Pink", true, currentTheme == ThemeId::pink);
+
+    themeMenu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (target),
+                             [this] (int result)
+                             {
+                                 switch (result)
+                                 {
+                                     case 100: applyTheme (ThemeId::dark);  persistThemeChoice (ThemeId::dark);  break;
+                                     case 101: applyTheme (ThemeId::light); persistThemeChoice (ThemeId::light); break;
+                                     case 102: applyTheme (ThemeId::pink);  persistThemeChoice (ThemeId::pink);  break;
+                                     default: break;
+                                 }
+                             });
+}
+
+void CarveSpaceAudioProcessorEditor::showAboutDialog()
+{
+    juce::DialogWindow::LaunchOptions options;
+    options.content.setOwned (new AboutContent());
+    options.dialogTitle = "About CarveSpace";
+    options.dialogBackgroundColour = juce::Colour (0xff16121c);
+    options.escapeKeyTriggersCloseButton = true;
+    options.useNativeTitleBar = true;
+    options.resizable = false;
+    options.componentToCentreAround = this;
+    options.launchAsync();
+}
+
+void CarveSpaceAudioProcessorEditor::showInfoMenu()
 {
     juce::PopupMenu menu;
-    menu.addItem (1, "About Trackspacer Clone");
-    menu.addItem (2, "Visit website");
-    menu.addItem (3, "Default size");
+
+    juce::PopupMenu themeMenu;
+    themeMenu.addItem (100, "Dark", true, currentTheme == ThemeId::dark);
+    themeMenu.addItem (101, "Light", true, currentTheme == ThemeId::light);
+    themeMenu.addItem (102, "Pink", true, currentTheme == ThemeId::pink);
+    menu.addSubMenu ("Theme", themeMenu);
+
     menu.addSeparator();
-    menu.addItem (4, "Read the manual");
+    menu.addItem (1, "About CarveSpace");
+    menu.addItem (2, "Default size");
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&background),
                         [this] (int result)
                         {
                             switch (result)
                             {
+                                case 100:
+                                    applyTheme (ThemeId::dark);
+                                    persistThemeChoice (ThemeId::dark);
+                                    break;
+
+                                case 101:
+                                    applyTheme (ThemeId::light);
+                                    persistThemeChoice (ThemeId::light);
+                                    break;
+
+                                case 102:
+                                    applyTheme (ThemeId::pink);
+                                    persistThemeChoice (ThemeId::pink);
+                                    break;
+
                                 case 1:
-                                    juce::AlertWindow::showMessageBoxAsync (
-                                        juce::MessageBoxIconType::InfoIcon,
-                                        "Trackspacer Clone 1.0.0",
-                                        "A native Linux functional clone of Wavesfactory Trackspacer 2.5.\n\n"
-                                        "32-band spectral sidechain carver: analyses the sidechain and applies "
-                                        "the inverse EQ curve to the main signal.\n\n"
-                                        "Built with JUCE 7.0.5. Frontend and DSP written from scratch.\n"
-                                        "Trackspacer is a trademark of Wavesfactory. This is an independent "
-                                        "compatibility reimplementation.");
+                                    showAboutDialog();
                                     break;
 
                                 case 2:
-                                    juce::URL ("https://www.wavesfactory.com/audio-plugins/trackspacer/")
-                                        .launchInDefaultBrowser();
-                                    break;
+                                    if (auto* boundsConstrainer = getConstrainer())
+                                        boundsConstrainer->setFixedAspectRatio (1.0);
 
-                                case 3:
-                                    if (auto* constrainer = getConstrainer())
-                                        constrainer->setFixedAspectRatio (1.0);
                                     setSize (designWidth, designHeight);
-                                    break;
-
-                                case 4:
-                                    juce::URL ("https://www.wavesfactory.com/audio-plugins/manuals/Trackspacer-User-Manual.pdf")
-                                        .launchInDefaultBrowser();
                                     break;
 
                                 default:

@@ -9,121 +9,209 @@ namespace
     constexpr float minDisplayDb = -72.0f;
     constexpr float maxDisplayDb = 6.0f;
     constexpr float minReductionDb = -36.0f;
+    constexpr float minFrequency = 20.0f;
+    constexpr float maxFrequency = 20000.0f;
 
-    float bandLogPosition (float frequencyHz)
+    const float gridFrequencies[] =
     {
-        constexpr float low = 20.0f;
-        constexpr float high = 20000.0f;
-        return std::log (juce::jlimit (low, high, frequencyHz) / low) / std::log (high / low);
-    }
-}
+        20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f,
+        100.0f, 200.0f, 300.0f, 400.0f, 500.0f, 600.0f, 700.0f, 800.0f, 900.0f,
+        1000.0f, 1500.0f, 2000.0f, 2500.0f, 3000.0f, 3500.0f, 4000.0f, 4500.0f,
+        5000.0f, 5500.0f, 6000.0f, 7000.0f, 8000.0f, 9000.0f, 10000.0f, 15000.0f, 20000.0f
+    };
 
-SpectrumDisplay::SpectrumDisplay (TrackspacerAudioProcessor& processorToUse)
+    bool isDecade (float frequency)
+    {
+        return juce::approximatelyEqual (frequency, 100.0f)
+            || juce::approximatelyEqual (frequency, 1000.0f)
+            || juce::approximatelyEqual (frequency, 10000.0f);
+    }
+
+    float bandFrequency (int band)
+    {
+        const float ratio = std::pow (maxFrequency / minFrequency, 1.0f / (float) (params::numBands - 1));
+        return minFrequency * std::pow (ratio, (float) band);
+    }
+} // namespace
+
+//==============================================================================
+SpectrumDisplay::SpectrumDisplay (CarveSpaceAudioProcessor& processorToUse)
     : processor (processorToUse)
 {
     setInterceptsMouseClicks (true, true);
     setMouseCursor (juce::MouseCursor::CrosshairCursor);
-    lastFrame.lowCutHz = 20.0f;
-    lastFrame.highCutHz = 20000.0f;
-    smoothedFrame = lastFrame;
+
+    smoothedFrame.lowCutHz = params::cutMin;
+    smoothedFrame.highCutHz = params::cutMax;
+
+    // Fine noise for the panel surface.
+    panelGrain = juce::Image (juce::Image::ARGB, 256, 256, true);
+    juce::Random random (0x1a2b3c4d);
+
+    for (int y = 0; y < panelGrain.getHeight(); ++y)
+    {
+        for (int x = 0; x < panelGrain.getWidth(); ++x)
+        {
+            const float v = random.nextFloat();
+            const auto alpha = (juce::uint8) juce::jlimit (0, 255, (int) (v * v * 26.0f));
+            panelGrain.setPixelAt (x, y, juce::Colour ((juce::uint8) 24, (juce::uint8) 24, (juce::uint8) 24, alpha));
+        }
+    }
+
     startTimerHz (30);
 }
 
 void SpectrumDisplay::timerCallback()
 {
-    lastFrame = processor.getDisplayFrame();
+    const auto frame = processor.getDisplayFrame();
 
-    // Smooth the curves a little for a silky display.
+    // Gentle smoothing for a silky display.
     constexpr float smoothing = 0.35f;
+
     for (int band = 0; band < params::numBands; ++band)
     {
-        smoothedFrame.bandFrequenciesHz[band] = lastFrame.bandFrequenciesHz[band];
-        smoothedFrame.sidechainDb[band] += (lastFrame.sidechainDb[band] - smoothedFrame.sidechainDb[band]) * smoothing;
-        smoothedFrame.reductionDb[band] += (lastFrame.reductionDb[band] - smoothedFrame.reductionDb[band]) * smoothing;
+        smoothedFrame.bandFrequenciesHz[band] = frame.bandFrequenciesHz[band];
+        smoothedFrame.sidechainDb[band] += (frame.sidechainDb[band] - smoothedFrame.sidechainDb[band]) * smoothing;
+        smoothedFrame.reductionDb[band] += (frame.reductionDb[band] - smoothedFrame.reductionDb[band]) * smoothing;
     }
-    smoothedFrame.lowCutHz = lastFrame.lowCutHz;
-    smoothedFrame.highCutHz = lastFrame.highCutHz;
+
+    smoothedFrame.lowCutHz = frame.lowCutHz > 0.0f ? frame.lowCutHz : params::cutMin;
+    smoothedFrame.highCutHz = frame.highCutHz > 0.0f ? frame.highCutHz : params::cutMax;
+    smoothedFrame.hoverFrequencyHz = frame.hoverFrequencyHz;
+    smoothedFrame.hoverDb = frame.hoverDb;
 
     repaint();
 }
 
+juce::Rectangle<float> SpectrumDisplay::plotArea() const
+{
+    const auto bounds = getLocalBounds().toFloat();
+    return { bounds.getX() + 4.5f, bounds.getY() + 3.5f,
+             bounds.getWidth() - 8.0f, bounds.getHeight() - 7.0f };
+}
+
 float SpectrumDisplay::xForFrequency (float frequencyHz) const
 {
-    const auto area = getLocalBounds().toFloat().reduced (14.0f, 10.0f);
-    return area.getX() + bandLogPosition (frequencyHz) * area.getWidth();
+    const auto area = plotArea();
+    const float normalised = std::log (juce::jlimit (minFrequency, maxFrequency, frequencyHz) / minFrequency)
+                           / std::log (maxFrequency / minFrequency);
+    return area.getX() + normalised * area.getWidth();
+}
+
+float SpectrumDisplay::frequencyForX (float x) const
+{
+    const auto area = plotArea();
+    const float normalised = juce::jlimit (0.0f, 1.0f, (x - area.getX()) / juce::jmax (1.0f, area.getWidth()));
+    return minFrequency * std::pow (maxFrequency / minFrequency, normalised);
 }
 
 float SpectrumDisplay::yForSidechainDb (float db) const
 {
-    const auto area = getLocalBounds().toFloat().reduced (14.0f, 10.0f);
+    const auto area = plotArea();
     const float normalised = juce::jlimit (0.0f, 1.0f, (db - minDisplayDb) / (maxDisplayDb - minDisplayDb));
     return area.getBottom() - normalised * area.getHeight();
 }
 
 float SpectrumDisplay::yForReductionDb (float db) const
 {
-    const auto area = getLocalBounds().toFloat().reduced (14.0f, 10.0f);
-    const float normalised = juce::jlimit (0.0f, 1.0f, (db - minReductionDb) / (0.0f - minReductionDb));
-    return area.getBottom() - normalised * area.getHeight() * 0.62f;
+    const auto area = plotArea();
+    const float depth = juce::jlimit (0.0f, 1.0f, db / minReductionDb);
+    return area.getY() + area.getHeight() * (0.70f + 0.26f * depth);
 }
 
 void SpectrumDisplay::paint (juce::Graphics& g)
 {
+    const auto& pal = theme::palette();
     const auto bounds = getLocalBounds().toFloat();
-    const auto area = bounds.reduced (14.0f, 10.0f);
-    const float corner = 9.0f;
+    const float corner = layout::displayCorner + pal.displayCornerExtra;
 
-    g.setColour (colours::displayBackground);
-    g.fillRoundedRectangle (bounds, corner);
+    juce::Path panel;
+    panel.addRoundedRectangle (bounds, corner);
 
-    g.setColour (juce::Colours::black.withAlpha (0.7f));
-    g.drawRoundedRectangle (bounds.reduced (0.5f), corner, 1.0f);
+    // Panel body with a subtle top-to-bottom falloff.
+    {
+        juce::ColourGradient body (pal.displayHi, bounds.getCentreX(), bounds.getY(),
+                                   pal.displayLo, bounds.getCentreX(), bounds.getBottom(), false);
+        body.addColour (0.45, pal.displayHi.interpolatedWith (pal.displayLo, 0.55f));
+        g.setGradientFill (body);
+        g.fillPath (panel);
+    }
 
-    drawGrid (g, area);
-    drawFilterRange (g, area, smoothedFrame);
-    drawCurves (g, area, smoothedFrame);
-    drawHoverReadout (g, area, smoothedFrame);
+    {
+        g.saveState();
+        g.reduceClipRegion (panel);
+
+        if (panelGrain.isValid())
+        {
+            g.setTiledImageFill (panelGrain, 0, 0, 0.85f);
+            g.fillRect (bounds);
+        }
+
+        // Slight glass highlight along the top edge.
+        {
+            juce::ColourGradient gloss (juce::Colours::white.withAlpha (0.045f), bounds.getCentreX(), bounds.getY(),
+                                        juce::Colours::transparentWhite, bounds.getCentreX(), bounds.getY() + 26.0f, false);
+            g.setGradientFill (gloss);
+            g.fillRect (bounds.withHeight (26.0f));
+        }
+
+        drawGrid (g);
+        drawFilterRange (g, smoothedFrame);
+        drawCurves (g, smoothedFrame);
+        drawHoverReadout (g, smoothedFrame);
+
+        g.restoreState();
+    }
+
+    // Dark card outline.
+    g.setColour (pal.panelOutline);
+    g.strokePath (panel, juce::PathStrokeType (1.1f));
 
     if (! advancedPanelVisible)
-        drawAdvancedDot (g, area);
+        drawAdvancedDot (g);
 }
 
-void SpectrumDisplay::drawGrid (juce::Graphics& g, juce::Rectangle<float> area)
+void SpectrumDisplay::drawGrid (juce::Graphics& g)
 {
-    const float frequencies[] = { 20.0f, 30.0f, 50.0f, 100.0f, 200.0f, 300.0f, 500.0f,
-                                  1000.0f, 2000.0f, 3000.0f, 5000.0f, 10000.0f, 20000.0f };
-    const float dbs[] = { 0.0f, -12.0f, -24.0f, -36.0f, -48.0f, -60.0f };
+    const auto& pal = theme::palette();
+    const auto area = plotArea();
 
-    g.setColour (colours::displayGrid);
-
-    for (float frequency : frequencies)
+    for (float frequency : gridFrequencies)
     {
         const float x = xForFrequency (frequency);
+
+        if (x < area.getX() - 0.5f || x > area.getRight() + 0.5f)
+            continue;
+
+        g.setColour (isDecade (frequency) ? pal.gridLine : pal.gridFaint);
         g.drawVerticalLine (juce::roundToInt (x), area.getY(), area.getBottom());
     }
 
-    for (float db : dbs)
+    // Horizontal dB lines.
+    for (int i = 1; i < 8; ++i)
     {
-        const float y = yForSidechainDb (db);
+        const float y = area.getY() + area.getHeight() * (float) i / 8.0f;
+        g.setColour (pal.gridFaint);
         g.drawHorizontalLine (juce::roundToInt (y), area.getX(), area.getRight());
     }
-
-    g.setColour (colours::displayGridBright);
-    g.drawHorizontalLine (juce::roundToInt (area.getY() + area.getHeight() * 0.5f), area.getX(), area.getRight());
 }
 
-void SpectrumDisplay::drawFilterRange (juce::Graphics& g, juce::Rectangle<float> area, const DisplayFrame& frame)
+void SpectrumDisplay::drawFilterRange (juce::Graphics& g, const DisplayFrame& frame)
 {
-    const float lowX = xForFrequency (frame.lowCutHz);
-    const float highX = xForFrequency (frame.highCutHz);
+    const auto& pal = theme::palette();
+    const auto area = plotArea();
+    const float lowX = juce::jlimit (area.getX(), area.getRight(), xForFrequency (frame.lowCutHz));
+    const float highX = juce::jlimit (area.getX(), area.getRight(), xForFrequency (frame.highCutHz));
 
-    g.setColour (juce::Colours::black.withAlpha (0.28f));
+    g.setColour (pal.shadow.withAlpha (0.38f));
+
     if (lowX > area.getX())
         g.fillRect (juce::Rectangle<float>::leftTopRightBottom (area.getX(), area.getY(), lowX, area.getBottom()));
+
     if (highX < area.getRight())
         g.fillRect (juce::Rectangle<float>::leftTopRightBottom (highX, area.getY(), area.getRight(), area.getBottom()));
 
-    g.setColour (juce::Colours::white.withAlpha (0.14f));
+    g.setColour (juce::Colours::white.withAlpha (0.13f));
     g.drawVerticalLine (juce::roundToInt (lowX), area.getY(), area.getBottom());
     g.drawVerticalLine (juce::roundToInt (highX), area.getY(), area.getBottom());
 }
@@ -146,14 +234,17 @@ void SpectrumDisplay::buildSmoothPath (juce::Path& path,
         const float y = yValues[i];
         const float midX = (previousX + x) * 0.5f;
         const float midY = (previousY + y) * 0.5f;
+
         path.quadraticTo (previousX, previousY, midX, midY);
     }
 
     path.lineTo (xValues[numPoints - 1], yValues[numPoints - 1]);
 }
 
-void SpectrumDisplay::drawCurves (juce::Graphics& g, juce::Rectangle<float> area, const DisplayFrame& frame)
+void SpectrumDisplay::drawCurves (juce::Graphics& g, const DisplayFrame& frame)
 {
+    const auto& pal = theme::palette();
+
     float xs[params::numBands];
     float sidechainYs[params::numBands];
     float reductionYs[params::numBands];
@@ -162,7 +253,8 @@ void SpectrumDisplay::drawCurves (juce::Graphics& g, juce::Rectangle<float> area
     {
         const float frequency = frame.bandFrequenciesHz[band] > 0.0f
                                     ? frame.bandFrequenciesHz[band]
-                                    : BandAnalyzer::bandFrequency (band);
+                                    : bandFrequency (band);
+
         xs[band] = xForFrequency (frequency);
         sidechainYs[band] = yForSidechainDb (frame.sidechainDb[band]);
         reductionYs[band] = yForReductionDb (frame.reductionDb[band]);
@@ -174,38 +266,55 @@ void SpectrumDisplay::drawCurves (juce::Graphics& g, juce::Rectangle<float> area
     juce::Path reductionPath;
     buildSmoothPath (reductionPath, xs, reductionYs, params::numBands);
 
-    // Subtle glow for the blue sidechain trace.
-    g.setColour (colours::sidechainBlue.withAlpha (0.20f));
-    g.strokePath (sidechainPath, juce::PathStrokeType (3.2f));
+    // Blue sidechain trace with a soft glow.
+    g.setColour (pal.sidechainBlue.withAlpha (0.16f));
+    g.strokePath (sidechainPath, juce::PathStrokeType (4.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    g.setColour (colours::sidechainBlue);
-    g.strokePath (sidechainPath, juce::PathStrokeType (1.7f));
+    g.setColour (pal.sidechainBlue);
+    g.strokePath (sidechainPath, juce::PathStrokeType (1.9f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    g.setColour (colours::reductionWhite.withAlpha (0.85f));
-    g.strokePath (reductionPath, juce::PathStrokeType (1.5f));
+    // White reduction curve, legible over the grid.
+    g.setColour (pal.shadow.withAlpha (0.35f));
+    g.strokePath (reductionPath, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
-    juce::ignoreUnused (area);
+    g.setColour (pal.reductionWhite);
+    g.strokePath (reductionPath, juce::PathStrokeType (1.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
-void SpectrumDisplay::drawAdvancedDot (juce::Graphics& g, juce::Rectangle<float> area)
+juce::Point<float> SpectrumDisplay::advancedDotPosition (juce::Rectangle<float> localBounds)
 {
-    const juce::Point<float> dot (area.getRight() - 8.0f, area.getBottom() - 7.0f);
-    g.setColour (colours::sidechainBlue.withAlpha (0.30f));
-    g.fillEllipse (juce::Rectangle<float> (10.0f, 10.0f).withCentre (dot));
-    g.setColour (colours::sidechainBlue);
-    g.fillEllipse (juce::Rectangle<float> (5.5f, 5.5f).withCentre (dot));
+    return { localBounds.getRight() - 16.6f, localBounds.getBottom() - 17.9f };
 }
 
-void SpectrumDisplay::drawHoverReadout (juce::Graphics& g, juce::Rectangle<float> area, const DisplayFrame& frame)
+void SpectrumDisplay::drawAdvancedDot (juce::Graphics& g)
+{
+    const auto& pal = theme::palette();
+    const auto dot = advancedDotPosition (getLocalBounds().toFloat());
+    const float radius = 5.6f;
+
+    g.setColour (pal.accent.withAlpha (0.16f));
+    g.fillEllipse (juce::Rectangle<float> (radius * 3.2f, radius * 3.2f).withCentre (dot));
+
+    g.setColour (pal.accent);
+    g.drawEllipse (juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (dot), 1.7f);
+}
+
+void SpectrumDisplay::drawHoverReadout (juce::Graphics& g, const DisplayFrame& frame)
 {
     if (! hovering || advancedPanelVisible)
         return;
 
-    const float normalisedX = juce::jlimit (0.0f, 1.0f, (hoverPosition.x - area.getX()) / juce::jmax (1.0f, area.getWidth()));
-    const float frequency = 20.0f * std::pow (1000.0f, normalisedX);
+    const auto area = plotArea();
+    const float x = juce::jlimit (area.getX(), area.getRight(), hoverPosition.x);
 
-    // Interpolate the displayed band data at the hover frequency.
+    if (hoverPosition.y < area.getY() || hoverPosition.y > area.getBottom())
+        return;
+
+    const float frequency = frequencyForX (x);
+
+    // Interpolate the displayed band data at the hovered frequency.
     float sidechainDb = -100.0f;
+    float reductionDb = 0.0f;
 
     for (int band = 0; band < params::numBands - 1; ++band)
     {
@@ -216,25 +325,31 @@ void SpectrumDisplay::drawHoverReadout (juce::Graphics& g, juce::Rectangle<float
         {
             const float t = (frequency - f0) / juce::jmax (1.0f, f1 - f0);
             sidechainDb = frame.sidechainDb[band] + (frame.sidechainDb[band + 1] - frame.sidechainDb[band]) * t;
+            reductionDb = frame.reductionDb[band] + (frame.reductionDb[band + 1] - frame.reductionDb[band]) * t;
             break;
         }
     }
 
-    const float x = juce::jlimit (area.getX(), area.getRight(), hoverPosition.x);
-    g.setColour (juce::Colours::white.withAlpha (0.15f));
+    g.setColour (juce::Colours::white.withAlpha (0.16f));
     g.drawVerticalLine (juce::roundToInt (x), area.getY(), area.getBottom());
 
-    juce::String text;
+    juce::String frequencyText;
+
     if (frequency >= 1000.0f)
-        text << juce::String (frequency / 1000.0f, frequency >= 10000.0f ? 1 : 2) << " kHz";
+        frequencyText << juce::String (frequency / 1000.0f, frequency >= 10000.0f ? 1 : 2) << " kHz";
     else
-        text << juce::String (juce::roundToInt (frequency)) << " Hz";
+        frequencyText << juce::String (juce::roundToInt (frequency)) << " Hz";
 
-    g.setColour (juce::Colours::white);
-    g.setFont (juce::Font (juce::Font::getDefaultSansSerifFontName(), 10.0f, juce::Font::plain));
-    g.drawText (text, juce::Rectangle<float> (area.getX() + 6.0f, area.getY() + 4.0f, 90.0f, 13.0f), juce::Justification::left);
+    juce::String text;
+    text << frequencyText << "    " << juce::String (sidechainDb, 1) << " dB";
 
-    juce::ignoreUnused (sidechainDb);
+    if (reductionDb < -0.1f)
+        text << "    -" << juce::String (juce::jmax (0.0f, -reductionDb), 1) << " dB";
+
+    g.setColour (juce::Colours::white.withAlpha (0.90f));
+    g.setFont (juce::Font (juce::Font::getDefaultSansSerifFontName(), 10.5f, juce::Font::plain));
+    g.drawText (text, juce::Rectangle<float> (area.getX() + 4.0f, area.getY() + 3.0f, 280.0f, 14.0f),
+                juce::Justification::left);
 }
 
 void SpectrumDisplay::mouseDown (const juce::MouseEvent& event)
@@ -242,12 +357,10 @@ void SpectrumDisplay::mouseDown (const juce::MouseEvent& event)
     if (advancedPanelVisible)
         return;
 
-    const auto area = getLocalBounds().toFloat().reduced (14.0f, 10.0f);
-    const juce::Point<float> dot (area.getRight() - 8.0f, area.getBottom() - 7.0f);
+    const auto dot = advancedDotPosition (getLocalBounds().toFloat());
 
-    if (event.position.getDistanceFrom (dot) < 14.0f)
-        if (onAdvancedPanelToggle != nullptr)
-            onAdvancedPanelToggle();
+    if (event.position.getDistanceFrom (dot) < 13.0f && onAdvancedPanelToggle != nullptr)
+        onAdvancedPanelToggle();
 }
 
 void SpectrumDisplay::mouseMove (const juce::MouseEvent& event)

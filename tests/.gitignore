@@ -1,0 +1,4 @@
+.work/
+fixtures/
+__pycache__/
+*.pyc

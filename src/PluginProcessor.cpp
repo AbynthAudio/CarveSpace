@@ -6,11 +6,35 @@ namespace ts
 {
 namespace
 {
+    juce::PropertiesFile& getAppProperties()
+    {
+        juce::PropertiesFile::Options options;
+        options.applicationName = "CarveSpace";
+        options.folderName = ".config/AbynthAudio";
+        options.filenameSuffix = "conf";
+        options.osxLibrarySubFolder = "Application Support";
+        options.storageFormat = juce::PropertiesFile::storeAsXML;
+
+        static juce::PropertiesFile properties (options);
+        return properties;
+    }
+
     juce::NormalisableRange<float> makeLogRange (float minValue, float maxValue)
     {
-        juce::NormalisableRange<float> range (minValue, maxValue);
-        range.setSkewForCentre (std::sqrt (minValue * maxValue));
-        return range;
+        // Exact logarithmic mapping: value = min * (max/min)^normalised.
+        return { minValue, maxValue,
+                 [] (float start, float end, float normalised)
+                 {
+                     return start * std::pow (end / start, normalised);
+                 },
+                 [] (float start, float end, float value)
+                 {
+                     return std::log (value / start) / std::log (end / start);
+                 },
+                 [] (float start, float end, float value)
+                 {
+                     return juce::jlimit (start, end, value);
+                 } };
     }
 
     juce::String amountText (float value)
@@ -21,40 +45,48 @@ namespace
     juce::String frequencyText (float value)
     {
         if (value >= 1000.0f)
-            return juce::String (value / 1000.0f, value >= 10000.0f ? 0 : 1) + " kHz";
-        return juce::String (juce::roundToInt (value)) + " Hz";
+            return juce::String (value / 1000.0f, 2) + "k";
+        return juce::String (value, 2);
     }
 
     juce::String millisecondsText (float value)
     {
-        if (value >= 100.0f)
-            return juce::String (juce::roundToInt (value)) + " ms";
-        if (value >= 10.0f)
-            return juce::String (value, 1) + " ms";
-        return juce::String (value, 2) + " ms";
+        return juce::String (value, 2);
     }
 
     juce::String panText (float value)
     {
-        const int rounded = juce::roundToInt (value);
-        if (rounded == 0)
-            return "Center";
-        return (rounded < 0 ? "L " : "R ") + juce::String (std::abs (rounded));
+        return juce::String (value, 1);
     }
+
+    class SwitchBoolParameter : public juce::AudioParameterBool
+    {
+    public:
+        SwitchBoolParameter (const juce::ParameterID& parameterID, const juce::String& name, bool defaultValue)
+            : juce::AudioParameterBool (parameterID, name, defaultValue)
+        {
+        }
+
+        juce::String getText (float value, int) const override
+        {
+            return value > 0.5f ? "ON" : "OFF";
+        }
+    };
 } // namespace
 
 //==============================================================================
-juce::AudioProcessorValueTreeState::ParameterLayout TrackspacerAudioProcessor::createParameterLayout()
+juce::AudioProcessorValueTreeState::ParameterLayout CarveSpaceAudioProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
+    // Order and names match the reference plug-in's host-visible parameter list.
     layout.add (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { params::amount, 1 }, "Amount",
+        juce::ParameterID { params::amount, 1 }, "Ratio",
         juce::NormalisableRange<float> (params::amountMin, params::amountMax, 0.01f),
         params::amountDefault,
         juce::AudioParameterFloatAttributes()
             .withLabel ("%")
-            .withStringFromValueFunction ([] (float value, int) { return amountText (value); })));
+            .withStringFromValueFunction ([] (float value, int) { return juce::String (value, 1); })));
 
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { params::lowCut, 1 }, "Low-cut",
@@ -72,6 +104,21 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrackspacerAudioProcessor::c
             .withLabel ("Hz")
             .withStringFromValueFunction ([] (float value, int) { return frequencyText (value); })));
 
+    layout.add (std::make_unique<SwitchBoolParameter> (
+        juce::ParameterID { params::freeze, 1 }, "Freeze", false));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { params::pan, 1 }, "Pan",
+        juce::NormalisableRange<float> (params::panMin, params::panMax, 0.01f),
+        params::panDefault,
+        juce::AudioParameterFloatAttributes()
+            .withLabel ("%")
+            .withStringFromValueFunction ([] (float value, int) { return juce::String (value, 1); })));
+
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { params::mode, 1 }, "Stereo Mode",
+        juce::StringArray { "L/R", "M/S" }, 0));
+
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { params::attack, 1 }, "Attack",
         makeLogRange (params::attackMin, params::attackMax),
@@ -88,29 +135,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrackspacerAudioProcessor::c
             .withLabel ("ms")
             .withStringFromValueFunction ([] (float value, int) { return millisecondsText (value); })));
 
-    layout.add (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { params::pan, 1 }, "Pan",
-        juce::NormalisableRange<float> (params::panMin, params::panMax, 0.01f),
-        params::panDefault,
-        juce::AudioParameterFloatAttributes()
-            .withLabel ("")
-            .withStringFromValueFunction ([] (float value, int) { return panText (value); })));
-
-    layout.add (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID { params::mode, 1 }, "Stereo Mode",
-        juce::StringArray { "L/R", "M/S" }, 0));
-
-    layout.add (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID { params::freeze, 1 }, "Freeze", false));
-
-    layout.add (std::make_unique<juce::AudioParameterBool> (
+    layout.add (std::make_unique<SwitchBoolParameter> (
         juce::ParameterID { params::scAudition, 1 }, "Sidechain", false));
 
     return layout;
 }
 
 //==============================================================================
-TrackspacerAudioProcessor::TrackspacerAudioProcessor()
+CarveSpaceAudioProcessor::CarveSpaceAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput ("Input", juce::AudioChannelSet::stereo(), true)
                           .withInput ("Sidechain", juce::AudioChannelSet::stereo(), false)
@@ -130,10 +162,14 @@ TrackspacerAudioProcessor::TrackspacerAudioProcessor()
     jassert (amountParam != nullptr && lowCutParam != nullptr && highCutParam != nullptr);
     jassert (attackParam != nullptr && releaseParam != nullptr && panParam != nullptr);
     jassert (modeParam != nullptr && freezeParam != nullptr && scAuditionParam != nullptr);
+
+    // The engine's latency is fixed by the FFT size. Announce it immediately so
+    // that hosts reading latency during their prepareToPlay() see the real value.
+    setLatencySamples (engine.getLatencySamples());
 }
 
 //==============================================================================
-void TrackspacerAudioProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
+void CarveSpaceAudioProcessor::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
 {
     engine.prepare (sampleRate);
     sidechainScratch.setSize (2, juce::jmax (maximumExpectedSamplesPerBlock, 1));
@@ -141,12 +177,12 @@ void TrackspacerAudioProcessor::prepareToPlay (double sampleRate, int maximumExp
     setLatencySamples (engine.getLatencySamples());
 }
 
-void TrackspacerAudioProcessor::releaseResources()
+void CarveSpaceAudioProcessor::releaseResources()
 {
     engine.reset();
 }
 
-bool TrackspacerAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
+bool CarveSpaceAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto mainIn = layouts.getMainInputChannelSet();
     const auto mainOut = layouts.getMainOutputChannelSet();
@@ -170,7 +206,7 @@ bool TrackspacerAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
     return true;
 }
 
-void TrackspacerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
+void CarveSpaceAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
     juce::ignoreUnused (midi);
@@ -229,7 +265,7 @@ void TrackspacerAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 }
 
 //==============================================================================
-CarverSettings TrackspacerAudioProcessor::currentSettings() const
+CarverSettings CarveSpaceAudioProcessor::currentSettings() const
 {
     CarverSettings settings;
     settings.amountPercent = amountParam != nullptr ? amountParam->get() : 0.0f;
@@ -244,7 +280,50 @@ CarverSettings TrackspacerAudioProcessor::currentSettings() const
     return settings;
 }
 
-DisplayFrame TrackspacerAudioProcessor::getDisplayFrame() const
+juce::String CarveSpaceAudioProcessor::getUiTheme() const
+{
+    if (apvts.state.hasProperty ("uiTheme"))
+        return apvts.state.getProperty ("uiTheme").toString();
+
+    return getAppProperties().getValue ("theme", "dark");
+}
+
+void CarveSpaceAudioProcessor::setUiTheme (const juce::String& themeName)
+{
+    apvts.state.setProperty ("uiTheme", themeName, nullptr);
+    auto& properties = getAppProperties();
+    properties.setValue ("theme", themeName);
+    properties.saveIfNeeded();
+}
+
+int CarveSpaceAudioProcessor::getSavedEditorWidth() const
+{
+    if (apvts.state.hasProperty ("editorWidth"))
+        return (int) apvts.state.getProperty ("editorWidth");
+
+    return (int) getAppProperties().getIntValue ("editorWidth", 650);
+}
+
+int CarveSpaceAudioProcessor::getSavedEditorHeight() const
+{
+    if (apvts.state.hasProperty ("editorHeight"))
+        return (int) apvts.state.getProperty ("editorHeight");
+
+    return (int) getAppProperties().getIntValue ("editorHeight", 650);
+}
+
+void CarveSpaceAudioProcessor::saveEditorSize (int width, int height)
+{
+    apvts.state.setProperty ("editorWidth", width, nullptr);
+    apvts.state.setProperty ("editorHeight", height, nullptr);
+
+    auto& properties = getAppProperties();
+    properties.setValue ("editorWidth", width);
+    properties.setValue ("editorHeight", height);
+    properties.saveIfNeeded();
+}
+
+DisplayFrame CarveSpaceAudioProcessor::getDisplayFrame() const
 {
     DisplayFrame frame;
     engine.getDisplayFrame (frame);
@@ -252,7 +331,7 @@ DisplayFrame TrackspacerAudioProcessor::getDisplayFrame() const
 }
 
 //==============================================================================
-void TrackspacerAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+void CarveSpaceAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     if (auto state = apvts.copyState(); state.isValid())
     {
@@ -261,16 +340,16 @@ void TrackspacerAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     }
 }
 
-void TrackspacerAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void CarveSpaceAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
 }
 
-juce::AudioProcessorEditor* TrackspacerAudioProcessor::createEditor()
+juce::AudioProcessorEditor* CarveSpaceAudioProcessor::createEditor()
 {
-    return new TrackspacerAudioProcessorEditor (*this);
+    return new CarveSpaceAudioProcessorEditor (*this);
 }
 
 } // namespace ts
@@ -278,5 +357,5 @@ juce::AudioProcessorEditor* TrackspacerAudioProcessor::createEditor()
 //==============================================================================
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new ts::TrackspacerAudioProcessor();
+    return new ts::CarveSpaceAudioProcessor();
 }

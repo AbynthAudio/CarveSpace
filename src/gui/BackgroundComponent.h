@@ -4,8 +4,9 @@
 
 namespace ts
 {
-/** Draws the static Trackspacer-style metal faceplate: rounded plate, labels,
-    logo and markings. Knobs and the display are separate child components.
+/** Draws the static CarveSpace metal faceplate: rounded plate, brushed metal
+    surface, engraved labels, scale markings and the brand badge. The knobs and
+    the dark spectrum panel are separate child components drawn on top.
 */
 class BackgroundComponent : public juce::Component
 {
@@ -22,6 +23,9 @@ private:
     void drawLabels (juce::Graphics& g);
     void drawLogo (juce::Graphics& g);
 
-    juce::Image noiseTexture;
+    juce::Image grainTexture;
+    juce::Image brushedTexture;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BackgroundComponent)
 };
 } // namespace ts

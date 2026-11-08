@@ -1,0 +1,176 @@
+{
+  "source": {
+    "original_windows_vst3": "/tmp/ts_install/cf64/VST3/Trackspacer25.vst3",
+    "format": "VST3 single-file (PE32+ DLL), built with JUCE 7.0.5 + VST3 SDK 3.7.2",
+    "bridged_with": "yabridge 5.1.1 + portable Wine 11.21 (WINEPREFIX=/tmp/refopt/wineprefix)",
+    "bridged_bundle": "/tmp/refhome/.vst3/yabridge/Trackspacer25.vst3",
+    "host": "TrackspacerHost (JUCE 7.0.5 VST3 hosting, 4-channel process buffer)",
+    "dump_command": "TrackspacerHost dump /tmp/refhome/.vst3/yabridge/Trackspacer25.vst3",
+    "raw_dump": "reference/metadata.txt"
+  },
+  "identity": {
+    "name": "Trackspacer 2.5",
+    "descriptiveName": "Trackspacer 2.5",
+    "manufacturer": "Wavesfactory",
+    "version": "2.5.10",
+    "plugin_code_note": "not exposed by host dump"
+  },
+  "latency": {
+    "latencySamples": 0,
+    "tailSamples": 0,
+    "measured_impulse_latency_samples_48k": 0,
+    "measured_note": "Bridged plugin, impulse at sample 24000 in both main and sidechain, output peak exactly at sample 24000 (0 samples). Also 0 through the dry path with silent sidechain. The reference is a zero-latency algorithm (no STFT/overlap-add delay)."
+  },
+  "buses": {
+    "inputs": 4,
+    "outputs": 2,
+    "inputBuses": [
+      { "index": 0, "name": "Input", "channels": 2, "layout": "Stereo", "enabled_in_dump": true },
+      { "index": 1, "name": "Sidechain", "channels": 2, "layout": "Stereo", "enabled_in_dump": true }
+    ],
+    "outputBuses": [
+      { "index": 0, "name": "Output", "channels": 2, "layout": "Stereo", "enabled_in_dump": true }
+    ],
+    "note": "dump calls AudioProcessor::enableAllBuses() before printing, so 'enabled_in_dump' is the forced-all-buses state, not necessarily the component's default VST3 aux state. Sidechain is a standard VST3 kAux input bus."
+  },
+  "parameters": {
+    "count": 10,
+    "continuous_numSteps": 2147483647,
+    "bool_numSteps": 2,
+    "list": [
+      {
+        "index": 0,
+        "id": "77748203",
+        "name": "Ratio",
+        "label": "%",
+        "default_normalised": 0.15,
+        "default_text": "15.0",
+        "numSteps": 2147483647,
+        "type": "continuous",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": [0.0, 100.0], "law": "linear % (text = 100*n)" },
+        "text_at": { "0.0": "0.0", "0.25": "25.0", "0.5": "50.0", "0.75": "75.0", "1.0": "100.0" },
+        "comment": "This is the UI's AMOUNT knob. Internal parameter name is 'Ratio'."
+      },
+      {
+        "index": 1,
+        "id": "2423",
+        "name": "Low-cut",
+        "label": "Hz",
+        "default_normalised": 0.0,
+        "default_text": "20.00",
+        "numSteps": 2147483647,
+        "type": "continuous",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": [20.0, 20000.0], "law": "logarithmic: f = 20 * 1000^n  (i.e. 20 * 10^(3n))" },
+        "text_at": { "0.0": "20.00", "0.25": "112.47", "0.5": "632.46", "0.75": "3.56k", "1.0": "20.00k" }
+      },
+      {
+        "index": 2,
+        "id": "2299",
+        "name": "High-cut",
+        "label": "Hz",
+        "default_normalised": 1.0,
+        "default_text": "20.00k",
+        "numSteps": 2147483647,
+        "type": "continuous",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": [20.0, 20000.0], "law": "logarithmic: f = 20 * 1000^n" },
+        "text_at": { "0.0": "20.00", "0.25": "112.47", "0.5": "632.46", "0.75": "3.56k", "1.0": "20.00k" }
+      },
+      {
+        "index": 3,
+        "id": "2081894039",
+        "name": "Freeze",
+        "label": "",
+        "default_normalised": 0.0,
+        "default_text": "OFF",
+        "numSteps": 2,
+        "type": "boolean",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": ["OFF", "ON"], "threshold": 0.5 },
+        "text_at": { "0.0": "OFF", "0.25": "OFF", "0.5": "OFF", "0.75": "ON", "1.0": "ON" }
+      },
+      {
+        "index": 4,
+        "id": "78973",
+        "name": "Pan",
+        "label": "%",
+        "default_normalised": 0.5,
+        "default_text": "50.0",
+        "numSteps": 2147483647,
+        "type": "continuous",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": [0.0, 100.0], "law": "linear % (text = 100*n)" },
+        "text_at": { "0.0": "0.0", "0.25": "25.0", "0.5": "50.0", "0.75": "75.0", "1.0": "100.0" },
+        "comment": "50 = centre. In L/R mode pans the effect left/right; in M/S mode pans it mid/side (manual)."
+      },
+      {
+        "index": 5,
+        "id": "2372003",
+        "name": "Stereo Mode",
+        "label": "",
+        "default_normalised": 0.0,
+        "default_text": "L/R",
+        "numSteps": 2,
+        "type": "choice",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": ["L/R", "M/S"], "threshold": 0.5 },
+        "text_at": { "0.0": "L/R", "0.25": "L/R", "0.5": "L/R", "0.75": "M/S", "1.0": "M/S" }
+      },
+      {
+        "index": 6,
+        "id": "2099",
+        "name": "Attack",
+        "label": "ms",
+        "default_normalised": 0.674743,
+        "default_text": "5.00",
+        "numSteps": 2147483647,
+        "type": "continuous",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": [0.01, 100.0], "law": "logarithmic: t = 0.01 * 10^(4n) ms" },
+        "text_at": { "0.0": "0.01", "0.25": "0.10", "0.5": "1.00", "0.75": "10.00", "1.0": "100.00" }
+      },
+      {
+        "index": 7,
+        "id": "2618",
+        "name": "Release",
+        "label": "ms",
+        "default_normalised": 0.519181,
+        "default_text": "30.00",
+        "numSteps": 2147483647,
+        "type": "continuous",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": [1.0, 700.0], "law": "logarithmic: t = 700^n ms (n=0 -> 1 ms, n=1 -> 700 ms)" },
+        "text_at": { "0.0": "1.00", "0.25": "5.14", "0.5": "26.46", "0.75": "136.09", "1.0": "700.00" }
+      },
+      {
+        "index": 8,
+        "id": "941475754",
+        "name": "Sidechain",
+        "label": "",
+        "default_normalised": 0.0,
+        "default_text": "OFF",
+        "numSteps": 2,
+        "type": "boolean",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": ["OFF", "ON"], "threshold": 0.5 },
+        "text_at": { "0.0": "OFF", "0.25": "OFF", "0.5": "OFF", "0.75": "ON", "1.0": "ON" },
+        "comment": "SC Audition: outputs the low-cut/high-cut filtered sidechain (manual)."
+      },
+      {
+        "index": 9,
+        "id": "1652125811",
+        "name": "Bypass",
+        "label": "",
+        "default_normalised": 0.0,
+        "default_text": "Off",
+        "numSteps": 2,
+        "type": "boolean",
+        "mapping": { "normalised_range": [0.0, 1.0], "text_range": ["Off", "On"], "threshold": 0.5 },
+        "text_at": { "0.0": "Off", "0.25": "Off", "0.5": "On", "0.75": "On", "1.0": "On" },
+        "comment": "Undocumented 10th parameter in the reference (not in docs/SPEC.md)."
+      }
+    ]
+  },
+  "notes": [
+    "Parameter ids are decimal strings of the VST3 ParamID values.",
+    "The reference exposes 10 parameters; the SPEC provisional list has 9 (Bypass is missing).",
+    "Amount id/name is 'Ratio' with default 15 % (0.15), not 0.",
+    "Continuous params report numSteps = 2147483647 (0x7FFFFFFF); booleans/choices report numSteps = 2.",
+    "Release maximum is 700 ms, not 1000 ms.",
+    "Attack range is 0.01..100 ms (SPEC says 0.1..100).",
+    "Latency is 0 and was confirmed by sample-accurate impulse passthrough."
+  ]
+}

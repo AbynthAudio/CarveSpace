@@ -1,0 +1,23 @@
+name: Trackspacer 2.5
+descriptiveName: Trackspacer 2.5
+manufacturer: Wavesfactory
+version: 2.5.10
+latencySamples: 0
+tailSamples: 0
+inputs: 4
+outputs: 2
+inputBuses: 2
+  bus 0 name="Input" channels=2 enabled=yes layout=Stereo
+  bus 1 name="Sidechain" channels=2 enabled=yes layout=Stereo
+outputBuses: 1
+  bus 0 name="Output" channels=2 enabled=yes layout=Stereo
+param 0 id="77748203" name="Ratio" label="%" default=0.15 numSteps=2147483647 value=0.15 text="15.0" [0=0.0] [0.25=25.0] [0.5=50.0] [0.75=75.0] [1=100.0]
+param 1 id="2423" name="Low-cut" label="Hz" default=0 numSteps=2147483647 value=0 text="20.00" [0=20.00] [0.25=112.47] [0.5=632.46] [0.75=3.56k] [1=20.00k]
+param 2 id="2299" name="High-cut" label="Hz" default=1 numSteps=2147483647 value=1 text="20.00k" [0=20.00] [0.25=112.47] [0.5=632.46] [0.75=3.56k] [1=20.00k]
+param 3 id="2081894039" name="Freeze" label="" default=0 numSteps=2 value=0 text="OFF" [0=OFF] [0.25=OFF] [0.5=OFF] [0.75=ON] [1=ON]
+param 4 id="78973" name="Pan" label="%" default=0.5 numSteps=2147483647 value=0.5 text="50.0" [0=0.0] [0.25=25.0] [0.5=50.0] [0.75=75.0] [1=100.0]
+param 5 id="2372003" name="Stereo Mode" label="" default=0 numSteps=2 value=0 text="L/R" [0=L/R] [0.25=L/R] [0.5=L/R] [0.75=M/S] [1=M/S]
+param 6 id="2099" name="Attack" label="ms" default=0.674743 numSteps=2147483647 value=0.674743 text="5.00" [0=0.01] [0.25=0.10] [0.5=1.00] [0.75=10.00] [1=100.00]
+param 7 id="2618" name="Release" label="ms" default=0.519181 numSteps=2147483647 value=0.519181 text="30.00" [0=1.00] [0.25=5.14] [0.5=26.46] [0.75=136.09] [1=700.00]
+param 8 id="941475754" name="Sidechain" label="" default=0 numSteps=2 value=0 text="OFF" [0=OFF] [0.25=OFF] [0.5=OFF] [0.75=ON] [1=ON]
+param 9 id="1652125811" name="Bypass" label="" default=0 numSteps=2 value=0 text="Off" [0=Off] [0.25=Off] [0.5=On] [0.75=On] [1=On]
