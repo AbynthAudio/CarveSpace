@@ -1,6 +1,10 @@
 # CarveSpace 1.0.0
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/live-demo.gif" alt="CarveSpace processing live audio" width="650">
+</p>
+
+<p align="center">
   <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/skins.gif" alt="CarveSpace skins" width="650">
 </p>
 

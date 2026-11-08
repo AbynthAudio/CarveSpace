@@ -40,16 +40,16 @@ Insert it on a bass, a pad, a vocal or a whole bus, feed it a sidechain, and tur
 
 ## Screenshots & animations
 
-**The three skins.** The faceplate, spectrum display and knobs are redrawn for each skin; the Abynth Audio swirl keeps its original colours.
+**Real-time processing.** A loop is playing through CarveSpace: the sidechain spectrum (blue) and the applied reduction curve (white) react live in the display. No standalone window chrome, just the plug-in editor.
+
+<p align="center">
+  <img src="docs/media/live-demo.gif" alt="CarveSpace processing live audio" width="650">
+</p>
+
+**The three skins.** Dark, Light and pastel Pink, with the same live audio running.
 
 <p align="center">
   <img src="docs/media/skins.gif" alt="CarveSpace skins: Dark, Light and Pink" width="650">
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/dark-650.png" width="31%" alt="Dark skin">
-  <img src="docs/screenshots/light-650.png" width="31%" alt="Light skin">
-  <img src="docs/screenshots/pink-650.png" width="31%" alt="Pink skin">
 </p>
 
 **Advanced panel in use.** Pan, L/R–M/S, Attack, Release and Sidechain audition.
