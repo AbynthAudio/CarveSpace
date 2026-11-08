@@ -11,7 +11,7 @@ First public release of **CarveSpace**, the 32-band spectral sidechain carver by
 | Platform | Asset |
 |---|---|
 | Linux x86_64 | `CarveSpace-linux-x86_64.vst3.tar.gz` (VST3 only) |
-| Windows x64 | `CarveSpace-windows-x64.vst3.tar.gz` (VST3 only) — **untested** (cross-built on Linux) |
+| Windows x64 | `CarveSpace-windows-x64.vst3` (direct VST3 file) — **untested** (cross-built on Linux) |
 | macOS Apple Silicon | `CarveSpace-macos-arm64.vst3.tar.gz` (VST3 only, unsigned) — **untested** (CI-built, not run on macOS hardware) |
 
 ## Highlights

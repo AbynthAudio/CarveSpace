@@ -71,7 +71,7 @@ Grab the latest release:
 | Platform | File | Notes |
 |---|---|---|
 | **Linux x86_64** | `CarveSpace-linux-x86_64.vst3.tar.gz` | VST3 only |
-| **Windows x64** | `CarveSpace-windows-x64.vst3.tar.gz` | VST3 only — **untested** (cross-built on Linux) |
+| **Windows x64** | `CarveSpace-windows-x64.vst3` | Direct VST3 file — **untested** (cross-built on Linux) |
 | **macOS Apple Silicon** | `CarveSpace-macos-arm64.vst3.tar.gz` | VST3 only, unsigned — **untested** (built by CI, not run on macOS hardware) |
 
 
@@ -85,7 +85,7 @@ mkdir -p ~/.vst3
 cp -r CarveSpace.vst3 ~/.vst3/
 ```
 
-**Windows** — extract the `.tar.gz` (e.g. with 7-Zip) and copy the `CarveSpace.vst3` folder to `C:\Program Files\Common Files\VST3\`.
+**Windows** — copy `CarveSpace-windows-x64.vst3` directly to `C:\Program Files\Common Files\VST3\`.
 **macOS** — extract the `.tar.gz` and copy `CarveSpace.vst3` to `~/Library/Audio/Plug-Ins/VST3/` (or `/Library/Audio/Plug-Ins/VST3/`); if Gatekeeper complains, right-click → Open.
 
 ## Quick start
