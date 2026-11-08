@@ -11,6 +11,9 @@ BackgroundComponent::BackgroundComponent()
     setInterceptsMouseClicks (true, false);
     setOpaque (false);
 
+    // Low-cost swirl rotation: only the small badge area is repainted.
+    startTimerHz (30);
+
     // Very fine grain for the brushed-metal plate.
     constexpr int size = 512;
 
@@ -208,7 +211,26 @@ void BackgroundComponent::drawLabels (juce::Graphics& g)
 
 void BackgroundComponent::drawLogo (juce::Graphics& g)
 {
-    ui::drawLogoBadge (g, layout::logo);
+    ui::drawLogoBadge (g, layout::logo, logoAngle);
+}
+
+void BackgroundComponent::timerCallback()
+{
+    if (logoPaused || ! isShowing())
+        return;
+
+    logoAngle += 0.018f; // clockwise, ~11.6 s per revolution at 30 Hz
+
+    if (logoAngle >= juce::MathConstants<float>::twoPi)
+        logoAngle -= juce::MathConstants<float>::twoPi;
+
+    repaint (layout::logo.expanded (3.0f).getSmallestIntegerContainer());
+}
+
+void BackgroundComponent::setLogoPaused (bool shouldBePaused)
+{
+    logoPaused = shouldBePaused;
+    repaint (layout::logo.expanded (3.0f).getSmallestIntegerContainer());
 }
 
 void BackgroundComponent::paint (juce::Graphics& g)
@@ -220,8 +242,21 @@ void BackgroundComponent::paint (juce::Graphics& g)
 
 void BackgroundComponent::mouseDown (const juce::MouseEvent& event)
 {
-    // The badge opens the info / options menu.
-    if (layout::logo.contains (event.position) && onLogoClicked != nullptr)
-        onLogoClicked();
+    if (! layout::logo.contains (event.position))
+        return;
+
+    // Right-click opens the info/options menu; left-click stops/resumes the
+    // black-hole swirl animation.
+    if (event.mods.isRightButtonDown())
+    {
+        if (onLogoClicked != nullptr)
+            onLogoClicked();
+    }
+    else
+    {
+        setLogoPaused (! logoPaused);
+    }
 }
+
+void BackgroundComponent::mouseUp (const juce::MouseEvent&) {}
 } // namespace ts

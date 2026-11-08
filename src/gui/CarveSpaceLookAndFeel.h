@@ -231,7 +231,7 @@ namespace ui
                            bool highlighted);
 
     /** Round engraved brand badge. */
-    void drawLogoBadge (juce::Graphics& g, juce::Rectangle<float> area);
+    void drawLogoBadge (juce::Graphics& g, juce::Rectangle<float> area, float rotationRadians = 0.0f);
 
     /** The three fixed theme swatch colours used by the skin button. */
     juce::Colour swatchColour (ThemeId id);

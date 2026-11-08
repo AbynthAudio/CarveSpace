@@ -831,7 +831,7 @@ void ui::drawFreezeButton (juce::Graphics& g,
 }
 
 //==============================================================================
-void ui::drawLogoBadge (juce::Graphics& g, juce::Rectangle<float> area)
+void ui::drawLogoBadge (juce::Graphics& g, juce::Rectangle<float> area, float rotationRadians)
 {
     const auto& pal = theme::palette();
     const auto centre = area.getCentre();
@@ -861,6 +861,8 @@ void ui::drawLogoBadge (juce::Graphics& g, juce::Rectangle<float> area)
         juce::Path clip;
         clip.addEllipse (innerDisc);
         g.reduceClipRegion (clip);
+
+        g.addTransform (juce::AffineTransform::rotation (rotationRadians, centre.x, centre.y));
 
         const auto source = brandIconSwirlSource();
         const float scale = juce::jmax (innerDisc.getWidth() / source.getWidth(),
