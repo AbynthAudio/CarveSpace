@@ -199,11 +199,11 @@ void BackgroundComponent::drawLabels (juce::Graphics& g)
         g.strokePath (right, stroke);
     }
 
-    // Maker wordmark: full-colour Abynth Audio logo (never tinted by the theme).
-    const auto& wordmarkImage = ui::brandWordmarkImage();
-
-    if (wordmarkImage.isValid())
-        g.drawImage (wordmarkImage, layout::wordmark, juce::RectanglePlacement::centred, false);
+    // Maker wordmark: back to the previous plain sans-serif tracked type (the
+    // logo's spiral is kept, but not the logo's wordmark lettering).
+    g.setFont (juce::Font ("Arial", 8.5f, juce::Font::plain));
+    g.setColour (ink);
+    g.drawText ("ABYNTH AUDIO", layout::wordmark, juce::Justification::centred, false);
 }
 
 void BackgroundComponent::drawLogo (juce::Graphics& g)

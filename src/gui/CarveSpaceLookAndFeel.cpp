@@ -909,9 +909,9 @@ const juce::Image& ui::brandLogoImage()
 
 juce::Rectangle<float> ui::brandIconSwirlSource()
 {
-    // The square icon also contains the wordmark at the bottom: crop tightly
-    // around the galaxy swirl (vortex centre ~ (308, 256) in the 600x600 icon).
-    return { 164.0f, 112.0f, 280.0f, 280.0f };
+    // The icon is 600x600 and was generated with the black hole at its exact
+    // centre (300,300), so crop a centred square around it.
+    return { 140.0f, 140.0f, 320.0f, 320.0f };
 }
 
 const juce::Image& ui::brandWordmarkImage()

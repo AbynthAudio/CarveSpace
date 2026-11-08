@@ -138,11 +138,11 @@ namespace layout
 
     // Freeze button (metal push button) and its label.
     inline const juce::Rectangle<float> freezeButton { 90.0f, 309.0f, 62.0f, 62.0f };
-    inline const juce::Rectangle<float> freezeLabel  { 100.0f, 278.0f, 42.0f, 13.0f };
+    inline const juce::Rectangle<float> freezeLabel  { 100.0f, 279.0f, 42.0f, 11.0f };
 
     // "— CARVESPACE —" brand line.
     inline const juce::Rectangle<float> brandDashLeft  { 462.0f, 284.0f, 16.0f, 2.0f };
-    inline const juce::Rectangle<float> brandText      { 487.0f, 277.0f, 82.0f, 14.0f };
+    inline const juce::Rectangle<float> brandText      { 487.0f, 278.0f, 82.0f, 12.0f };
     inline const juce::Rectangle<float> brandDashRight { 579.0f, 284.0f, 16.0f, 2.0f };
 
     // Amount scale markings.
@@ -150,29 +150,29 @@ namespace layout
     inline const juce::Rectangle<float> amountDotRight { 397.0f, 478.0f, 9.0f, 9.0f };
     inline const juce::Rectangle<float> amountZero     { 244.0f, 493.0f, 5.0f, 11.0f };
     inline const juce::Rectangle<float> amountHundred  { 393.0f, 493.0f, 16.0f, 11.0f };
-    inline const juce::Rectangle<float> amountCaption  { 300.0f, 506.0f, 49.0f, 14.0f };
+    inline const juce::Rectangle<float> amountCaption  { 300.0f, 507.0f, 49.0f, 12.0f };
 
     // Low-cut markings.
     inline const juce::Rectangle<float> lowCutDotLeft   { 61.0f, 578.0f, 9.0f, 9.0f };
     inline const juce::Rectangle<float> lowCutDotRight  { 171.0f, 578.0f, 9.0f, 9.0f };
-    inline const juce::Rectangle<float> lowCutMinLabel  { 53.0f, 595.0f, 26.0f, 11.0f };
-    inline const juce::Rectangle<float> lowCutMaxLabel  { 165.0f, 595.0f, 20.0f, 11.0f };
-    inline const juce::Rectangle<float> lowCutCaption   { 95.0f, 607.0f, 52.0f, 14.0f };
+    inline const juce::Rectangle<float> lowCutMinLabel  { 53.0f, 596.0f, 26.0f, 10.0f };
+    inline const juce::Rectangle<float> lowCutMaxLabel  { 165.0f, 596.0f, 20.0f, 10.0f };
+    inline const juce::Rectangle<float> lowCutCaption   { 95.0f, 609.0f, 52.0f, 12.0f };
 
     // High-cut markings.
     inline const juce::Rectangle<float> highCutDotLeft  { 468.0f, 578.0f, 9.0f, 9.0f };
     inline const juce::Rectangle<float> highCutDotRight { 578.0f, 578.0f, 9.0f, 9.0f };
-    inline const juce::Rectangle<float> highCutMinLabel { 460.0f, 595.0f, 26.0f, 11.0f };
-    inline const juce::Rectangle<float> highCutMaxLabel { 571.0f, 595.0f, 20.0f, 11.0f };
-    inline const juce::Rectangle<float> highCutCaption  { 501.0f, 607.0f, 55.0f, 14.0f };
+    inline const juce::Rectangle<float> highCutMinLabel { 460.0f, 596.0f, 26.0f, 10.0f };
+    inline const juce::Rectangle<float> highCutMaxLabel { 571.0f, 596.0f, 20.0f, 10.0f };
+    inline const juce::Rectangle<float> highCutCaption  { 501.0f, 609.0f, 55.0f, 12.0f };
 
     // Little angle marks above the cut knobs.
     inline const juce::Rectangle<float> bracketLeft  { 101.0f, 431.0f, 39.0f, 15.0f };
     inline const juce::Rectangle<float> bracketRight { 508.0f, 431.0f, 40.0f, 15.0f };
 
     // Brand badge and maker wordmark.
-    inline const juce::Rectangle<float> logo      { 307.5f, 542.5f, 35.0f, 35.0f }; // swirl badge, centred on x=325
-    inline const juce::Rectangle<float> wordmark  { 252.5f, 604.0f, 145.0f, 31.0f }; // full-colour wordmark image
+    inline const juce::Rectangle<float> logo      { 290.0f, 535.0f, 70.0f, 70.0f };  // swirl badge, centred on x=325
+    inline const juce::Rectangle<float> wordmark  { 245.0f, 615.0f, 160.0f, 12.0f }; // small uppercase maker text
 
     // Always-visible theme / skin switcher (top-right of the plate).
     inline const juce::Rectangle<float> skinButton { 578.0f, 12.0f, 56.0f, 32.0f };
