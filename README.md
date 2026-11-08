@@ -75,7 +75,7 @@ Grab the latest release:
 | Platform | File | Notes |
 |---|---|---|
 | **Linux x86_64** | `CarveSpace-linux-x86_64.zip` | VST3 + Standalone |
-| **Windows x64** | `CarveSpace-windows-x64.zip` | VST3 + Standalone — **untested** (cross-built on Linux; the author uses Linux) |
+| **Windows x64** | `CarveSpace-windows-x64.zip` | VST3 + Standalone — **untested** (cross-built on Linux) |
 | **macOS Apple Silicon** | `CarveSpace-macos-arm64.zip` | VST3, unsigned — **untested** (built by CI, not run on macOS hardware) |
 
 ### Install
@@ -128,7 +128,7 @@ ninja -C build CarveSpace_VST3 CarveSpace_Standalone
 ```
 
 Outputs: `build/CarveSpace_artefacts/Release/VST3/CarveSpace.vst3` and the Standalone app.
-Cross-compiling Windows with LLVM-MinGW and packaging notes are in [docs/BUILD.md](docs/BUILD.md) and [docs/BUILD-CROSS.md](docs/BUILD-CROSS.md). The GitHub Actions matrix builds Linux, Windows and macOS arm64 automatically. The Windows and macOS binaries are provided as-is and are **untested on Windows/macOS hardware** (the author develops and tests on Linux); please report any issue. (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
+Cross-compiling Windows with LLVM-MinGW and packaging notes are in [docs/BUILD.md](docs/BUILD.md) and [docs/BUILD-CROSS.md](docs/BUILD-CROSS.md). The GitHub Actions matrix builds Linux, Windows and macOS arm64 automatically. The Windows and macOS binaries are provided as-is and are **untested on Windows/macOS hardware** (development and testing happen on Linux); please report any issue. (see [`.github/workflows/build.yml`](.github/workflows/build.yml)).
 
 ## Validation
 
