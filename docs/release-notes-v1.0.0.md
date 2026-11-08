@@ -1,5 +1,15 @@
 # CarveSpace 1.0.0
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/skins.gif" alt="CarveSpace skins" width="650">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/AbynthAudio/CarveSpace/master/docs/media/swirl-rotation.gif" alt="Animated Abynth Audio swirl" width="160">
+</p>
+
+
+
 First public release of **CarveSpace**, the 32-band spectral sidechain carver by **Abynth Audio**.
 
 ## Downloads
