@@ -52,17 +52,13 @@ Insert it on a bass, a pad, a vocal or a whole bus, feed it a sidechain, and tur
   <img src="docs/screenshots/pink-650.png" width="31%" alt="Pink skin">
 </p>
 
-**Advanced panel in use.** Pan, L/R–M/S, Attack, Release and Sidechain audition, while the swirl keeps rotating.
+**Advanced panel in use.** Pan, L/R–M/S, Attack, Release and Sidechain audition.
 
 <p align="center">
-  <img src="docs/media/advanced-panel.gif" alt="CarveSpace advanced panel with animated swirl" width="650">
+  <img src="docs/media/advanced-panel.gif" alt="CarveSpace advanced panel" width="650">
 </p>
 
-**The animated black-hole swirl.** Clockwise, ~9.5 s per revolution, the hole stays perfectly centred; click it to pause/resume.
-
-<p align="center">
-  <img src="docs/media/swirl-rotation.gif" alt="Animated Abynth Audio black-hole swirl" width="180">
-</p>
+The Abynth Audio swirl rotates slowly in the background; **click it to pause or resume** the animation.
 
 More stills in [`docs/screenshots/`](docs/screenshots).
 
@@ -74,22 +70,24 @@ Grab the latest release:
 
 | Platform | File | Notes |
 |---|---|---|
-| **Linux x86_64** | `CarveSpace-linux-x86_64.zip` | VST3 + Standalone |
-| **Windows x64** | `CarveSpace-windows-x64.zip` | VST3 + Standalone — **untested** (cross-built on Linux) |
-| **macOS Apple Silicon** | `CarveSpace-macos-arm64.zip` | VST3, unsigned — **untested** (built by CI, not run on macOS hardware) |
+| **Linux x86_64** | `CarveSpace-linux-x86_64.vst3.tar.gz` | VST3 only |
+| **Windows x64** | `CarveSpace-windows-x64.vst3.tar.gz` | VST3 only — **untested** (cross-built on Linux) |
+| **macOS Apple Silicon** | `CarveSpace-macos-arm64.vst3.tar.gz` | VST3 only, unsigned — **untested** (built by CI, not run on macOS hardware) |
+
+Every archive contains only the `CarveSpace.vst3` plug-in bundle (no Standalone).
 
 ### Install
 
 **Linux**
 
 ```bash
-unzip CarveSpace-linux-x86_64.zip -d CarveSpace
+tar -xzf CarveSpace-linux-x86_64.vst3.tar.gz
 mkdir -p ~/.vst3
-cp -r CarveSpace/CarveSpace.vst3 ~/.vst3/
+cp -r CarveSpace.vst3 ~/.vst3/
 ```
 
-**Windows** — copy `CarveSpace.vst3` to `C:\Program Files\Common Files\VST3\`.
-**macOS** — copy `CarveSpace.vst3` to `~/Library/Audio/Plug-Ins/VST3/` (or `/Library/Audio/Plug-Ins/VST3/`); if Gatekeeper complains, right-click → Open.
+**Windows** — extract the `.tar.gz` (e.g. with 7-Zip) and copy the `CarveSpace.vst3` folder to `C:\Program Files\Common Files\VST3\`.
+**macOS** — extract the `.tar.gz` and copy `CarveSpace.vst3` to `~/Library/Audio/Plug-Ins/VST3/` (or `/Library/Audio/Plug-Ins/VST3/`); if Gatekeeper complains, right-click → Open.
 
 ## Quick start
 
